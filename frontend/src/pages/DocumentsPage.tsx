@@ -1,3 +1,9 @@
+import MainLayout from '../components/layout/MainLayout';
+
 export default function DocumentsPage() {
-  return <h1>Documents</h1>;
+  return (
+    <MainLayout>
+      <h1>Documents</h1>
+    </MainLayout>
+  );
 }
