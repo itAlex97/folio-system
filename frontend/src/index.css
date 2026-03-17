@@ -172,3 +172,321 @@ aside {
   font-size: 14px;
   font-weight: 500;
 }
+
+/* PAGE HEADER */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.page-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* BUTTON */
+
+.btn-primary {
+  background: #111827;
+  color: white;
+
+  border: none;
+  border-radius: 6px;
+
+  padding: 8px 14px;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #1f2937;
+}
+
+/* DOCUMENTS TABLE */
+
+.documents-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.documents-table th {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+
+  padding: 12px 16px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.documents-table td {
+  padding: 14px 16px;
+  font-size: 14px;
+
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.documents-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+/* STATUS BADGES */
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+
+  font-size: 12px;
+  font-weight: 500;
+
+  display: inline-block;
+}
+
+/* OPEN */
+
+.status-open {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* CLOSED */
+
+.status-closed {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* CANCELLED */
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* TABLE ACTIONS */
+
+.table-action {
+  background: none;
+  border: none;
+
+  color: #2563eb;
+
+  font-size: 13px;
+  font-weight: 500;
+
+  cursor: pointer;
+}
+
+.table-action:hover {
+  text-decoration: underline;
+}
+
+/* DOCUMENT DETAIL CARD */
+
+.document-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+
+  border-radius: 8px;
+
+  padding: 24px;
+
+  max-width: 600px;
+}
+
+/* FIELD LAYOUT */
+
+.document-field {
+  display: flex;
+  justify-content: space-between;
+
+  padding: 10px 0;
+
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.document-field:last-child {
+  border-bottom: none;
+}
+
+.field-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.field-value {
+  font-weight: 500;
+}
+
+/* DOCUMENT DETAIL CARD */
+
+.document-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+
+  border-radius: 8px;
+
+  padding: 24px;
+
+  max-width: 600px;
+}
+
+/* FIELD LAYOUT */
+
+.document-field {
+  display: flex;
+  justify-content: space-between;
+
+  padding: 10px 0;
+
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.document-field:last-child {
+  border-bottom: none;
+}
+
+.field-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.field-value {
+  font-weight: 500;
+}
+
+/* DANGER BUTTON */
+
+.btn-danger {
+  background: #dc2626;
+  color: white;
+
+  border: none;
+  border-radius: 6px;
+
+  padding: 8px 14px;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+/* MODAL OVERLAY */
+
+.modal-overlay {
+  position: fixed;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  background: rgba(0, 0, 0, 0.3);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* MODAL */
+
+.modal {
+  background: white;
+
+  border-radius: 8px;
+
+  padding: 24px;
+
+  width: 400px;
+
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* MODAL TEXT */
+
+.modal-title {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.modal-message {
+  font-size: 14px;
+  color: #6b7280;
+
+  margin-bottom: 20px;
+}
+
+/* ACTIONS */
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 12px;
+}
+
+/* DOCUMENT FORM */
+
+.document-form {
+  background: white;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+
+  padding: 24px;
+
+  max-width: 500px;
+}
+
+/* FIELD */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+
+  margin-bottom: 16px;
+}
+
+.form-field label {
+  font-size: 13px;
+  margin-bottom: 6px;
+
+  color: #374151;
+}
+
+.form-field input,
+.form-field select {
+  border: 1px solid #d1d5db;
+
+  border-radius: 6px;
+
+  padding: 8px 10px;
+
+  font-size: 14px;
+}
+
+/* ACTIONS */
+
+.form-actions {
+  margin-top: 20px;
+}
