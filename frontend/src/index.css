@@ -490,3 +490,71 @@ aside {
 .form-actions {
   margin-top: 20px;
 }
+
+.form-error {
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* EMPTY STATE */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 60px 20px;
+
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+
+  background: #fafafa;
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* TABLE FILTERS */
+
+.table-filters {
+  display: flex;
+  gap: 12px;
+
+  margin-bottom: 16px;
+}
+
+.table-filters input,
+.table-filters select {
+  border: 1px solid #d1d5db;
+
+  border-radius: 6px;
+
+  padding: 6px 10px;
+
+  font-size: 14px;
+}
+
+.no-results {
+  text-align: center;
+  padding: 24px;
+
+  color: #6b7280;
+  font-size: 14px;
+}
+
+th {
+  cursor: pointer;
+  user-select: none;
+}

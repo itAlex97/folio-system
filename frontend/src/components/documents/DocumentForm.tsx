@@ -6,9 +6,39 @@ export default function DocumentForm() {
   const [program, setProgram] = useState('');
   const [family, setFamily] = useState('');
   const [responsible, setResponsible] = useState('');
+  const [errors, setErrors] = useState({
+    type: '',
+    program: '',
+    family: '',
+    responsible: '',
+  });
+
+  const isFormValid = type && program && family && responsible;
+
+  function validate() {
+    const newErrors = {
+      type: '',
+      program: '',
+      family: '',
+      responsible: '',
+    };
+
+    if (!type) newErrors.type = 'Document type is required';
+    if (!program) newErrors.program = 'Program is required';
+    if (!family) newErrors.family = 'Family is required';
+    if (!responsible) newErrors.responsible = 'Responsible is required';
+
+    setErrors(newErrors);
+
+    return !Object.values(newErrors).some((error) => error !== '');
+  }
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    const isValid = validate();
+
+    if (!isValid) return;
 
     console.log({
       type,
@@ -30,6 +60,7 @@ export default function DocumentForm() {
           <option value="DFM">DFM</option>
         </select>
       </div>
+      {errors.type && <span className="form-error">{errors.type}</span>}
 
       <div className="form-field">
         <label>Program</label>
@@ -40,6 +71,7 @@ export default function DocumentForm() {
           <option value="31XX">31XX</option>
         </select>
       </div>
+      {errors.program && <span className="form-error">{errors.program}</span>}
 
       <div className="form-field">
         <label>Family</label>
@@ -51,6 +83,7 @@ export default function DocumentForm() {
           <option value="IP">IP</option>
         </select>
       </div>
+      {errors.family && <span className="form-error">{errors.family}</span>}
 
       <div className="form-field">
         <label>Responsible</label>
@@ -61,9 +94,12 @@ export default function DocumentForm() {
           onChange={(e) => setResponsible(e.target.value)}
         />
       </div>
+      {errors.responsible && (
+        <span className="form-error">{errors.responsible}</span>
+      )}
 
       <div className="form-actions">
-        <Button>Create Document</Button>
+        <Button disabled={!isFormValid}>Create Document</Button>
       </div>
     </form>
   );
