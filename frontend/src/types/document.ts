@@ -11,4 +11,7 @@ export interface Document {
   responsible: string;
   status: DocumentStatus;
   created: string;
+  title?: string | null;
+  description?: string | null;
+  closedAt?: string | null;
 }

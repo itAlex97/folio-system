@@ -3,15 +3,36 @@ import { NavLink } from 'react-router-dom';
 export default function Sidebar() {
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">Folio System</div>
-
       <nav className="sidebar-nav">
-        <NavLink to="/" className="nav-item">
-          Dashboard
+        <span className="sidebar-section-label">Documents</span>
+
+        <NavLink
+          to="/documents"
+          end
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          Overview
         </NavLink>
 
-        <NavLink to="/documents" className="nav-item">
-          Documents
+        <NavLink
+          to="/documents/bcn"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          BCN
+        </NavLink>
+
+        <NavLink
+          to="/documents/dcn"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          DCN
+        </NavLink>
+
+        <NavLink
+          to="/documents/dfm"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          DFM
         </NavLink>
       </nav>
     </aside>

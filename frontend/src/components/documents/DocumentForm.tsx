@@ -1,8 +1,26 @@
 import { useState } from 'react';
 import Button from '../common/Button';
+import type { DocumentType } from '../../types/document';
 
-export default function DocumentForm() {
-  const [type, setType] = useState('');
+interface Props {
+  initialType?: DocumentType | '';
+  isTypeLocked?: boolean;
+  onCancel?: () => void;
+  onSubmit?: (values: {
+    type: DocumentType;
+    program: string;
+    family: string;
+    responsible: string;
+  }) => void;
+}
+
+export default function DocumentForm({
+  initialType = '',
+  isTypeLocked = false,
+  onCancel,
+  onSubmit,
+}: Props) {
+  const [type, setType] = useState(initialType);
   const [program, setProgram] = useState('');
   const [family, setFamily] = useState('');
   const [responsible, setResponsible] = useState('');
@@ -40,8 +58,10 @@ export default function DocumentForm() {
 
     if (!isValid) return;
 
-    console.log({
-      type,
+    const submittedType = type as DocumentType;
+
+    onSubmit?.({
+      type: submittedType,
       program,
       family,
       responsible,
@@ -53,13 +73,22 @@ export default function DocumentForm() {
       <div className="form-field">
         <label>Document Type</label>
 
-        <select value={type} onChange={(e) => setType(e.target.value)}>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as DocumentType | '')}
+          disabled={isTypeLocked}
+        >
           <option value="">Select type</option>
           <option value="BCN">BCN</option>
           <option value="DCN">DCN</option>
           <option value="DFM">DFM</option>
         </select>
       </div>
+      {isTypeLocked && (
+        <span className="form-hint">
+          Document type is set by the current table.
+        </span>
+      )}
       {errors.type && <span className="form-error">{errors.type}</span>}
 
       <div className="form-field">
@@ -90,6 +119,7 @@ export default function DocumentForm() {
 
         <input
           type="text"
+          placeholder="Enter responsible owner"
           value={responsible}
           onChange={(e) => setResponsible(e.target.value)}
         />
@@ -99,7 +129,12 @@ export default function DocumentForm() {
       )}
 
       <div className="form-actions">
-        <Button disabled={!isFormValid}>Create Document</Button>
+        <Button type="submit" disabled={!isFormValid}>
+          Create Document
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
     </form>
   );

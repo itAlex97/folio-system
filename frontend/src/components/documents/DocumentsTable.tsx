@@ -1,55 +1,80 @@
-import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { useDocuments } from '../../hooks/useDocuments';
+import type { DocumentType } from '../../types/document';
 
-export default function DocumentsTable() {
+interface Props {
+  type?: DocumentType;
+}
+
+export default function DocumentsTable({ type }: Props) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const { documents, loading } = useDocuments();
+  const { documents, loading, error } = useDocuments();
 
-  // SORT STATE
-  const [sortField, setSortField] = useState<string>('');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const search = searchParams.get('search') ?? '';
+  const statusFilter = searchParams.get('status') ?? '';
+  const programFilter = searchParams.get('program') ?? '';
+  const sortField = searchParams.get('sort') ?? '';
+  const sortDirection =
+    searchParams.get('direction') === 'desc' ? 'desc' : 'asc';
 
-  // Filters state
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [programFilter, setProgramFilter] = useState('');
+  function updateParams(nextValues: Record<string, string>) {
+    const nextParams = new URLSearchParams(searchParams);
+
+    for (const [key, value] of Object.entries(nextValues)) {
+      if (value) {
+        nextParams.set(key, value);
+      } else {
+        nextParams.delete(key);
+      }
+    }
+
+    setSearchParams(nextParams);
+  }
 
   function handleSort(field: string) {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      updateParams({
+        sort: field,
+        direction: sortDirection === 'asc' ? 'desc' : 'asc',
+      });
     } else {
-      setSortField(field);
-      setSortDirection('asc');
+      updateParams({
+        sort: field,
+        direction: 'asc',
+      });
     }
   }
 
-  // Loading state
   if (loading) {
-    return <p>Loading documents...</p>;
+    return <div className="loading-state">Loading documents...</div>;
   }
 
-  // Filtering logic
+  if (error) {
+    return <div className="loading-state">Unable to load documents: {error}</div>;
+  }
+
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch = doc.folio
       .toLowerCase()
       .includes(search.toLowerCase());
 
     const matchesStatus = statusFilter === '' || doc.status === statusFilter;
-
     const matchesProgram =
       programFilter === '' || doc.program === programFilter;
+    const matchesType = !type || doc.type === type;
 
-    return matchesSearch && matchesStatus && matchesProgram;
+    return matchesSearch && matchesStatus && matchesProgram && matchesType;
   });
 
   const sortedDocuments = [...filteredDocuments].sort((a, b) => {
     if (!sortField) return 0;
 
-    const aValue = a[sortField as keyof typeof a];
-    const bValue = b[sortField as keyof typeof b];
+    const aValue = String(a[sortField as keyof typeof a] ?? '');
+    const bValue = String(b[sortField as keyof typeof b] ?? '');
 
     if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
     if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
@@ -63,20 +88,22 @@ export default function DocumentsTable() {
     return sortDirection === 'asc' ? ' ↑' : ' ↓';
   }
 
+  const hasActiveControls =
+    Boolean(search) || Boolean(statusFilter) || Boolean(programFilter) || Boolean(sortField);
+
   return (
-    <div>
-      {/* Filters */}
+    <div className="table-panel">
       <div className="table-filters">
         <input
           type="text"
           placeholder="Search by folio"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => updateParams({ search: e.target.value })}
         />
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => updateParams({ status: e.target.value })}
         >
           <option value="">All Status</option>
           <option value="OPEN">OPEN</option>
@@ -86,7 +113,7 @@ export default function DocumentsTable() {
 
         <select
           value={programFilter}
-          onChange={(e) => setProgramFilter(e.target.value)}
+          onChange={(e) => updateParams({ program: e.target.value })}
         >
           <option value="">All Programs</option>
           <option value="Y2XX">Y2XX</option>
@@ -94,19 +121,35 @@ export default function DocumentsTable() {
         </select>
       </div>
 
-      {/* Table */}
+      <div className="document-actions">
+        <p className="document-meta">
+          Showing {sortedDocuments.length} of {documents.length} documents
+          {type ? ` in ${type}` : ''}.
+        </p>
+
+        {hasActiveControls && (
+          <button
+            type="button"
+            className="table-action"
+            onClick={() => setSearchParams(new URLSearchParams())}
+          >
+            Clear filters and sorting
+          </button>
+        )}
+      </div>
+
       <table className="documents-table">
         <thead>
           <tr>
-            <th onClick={() => handleSort('folio')}>
+            <th className="sortable" onClick={() => handleSort('folio')}>
               Folio{renderSortIcon('folio')}
             </th>
 
-            <th onClick={() => handleSort('type')}>
+            <th className="sortable" onClick={() => handleSort('type')}>
               Type{renderSortIcon('type')}
             </th>
 
-            <th onClick={() => handleSort('program')}>
+            <th className="sortable" onClick={() => handleSort('program')}>
               Program{renderSortIcon('program')}
             </th>
 
@@ -114,11 +157,11 @@ export default function DocumentsTable() {
 
             <th>Responsible</th>
 
-            <th onClick={() => handleSort('status')}>
+            <th className="sortable" onClick={() => handleSort('status')}>
               Status{renderSortIcon('status')}
             </th>
 
-            <th onClick={() => handleSort('created')}>
+            <th className="sortable" onClick={() => handleSort('created')}>
               Created{renderSortIcon('created')}
             </th>
 
@@ -130,7 +173,8 @@ export default function DocumentsTable() {
           {sortedDocuments.length === 0 ? (
             <tr>
               <td colSpan={8} className="no-results">
-                No documents found
+                No documents found. Adjust the filters or clear them to see all
+                documents again.
               </td>
             </tr>
           ) : (
@@ -150,10 +194,18 @@ export default function DocumentsTable() {
 
                 <td>
                   <button
+                    type="button"
                     className="table-action"
-                    onClick={() => navigate(`/documents/${doc.id}`)}
+                    onClick={() =>
+                      navigate(`/documents/${doc.id}`, {
+                        state: {
+                          returnTo: `${location.pathname}${location.search}`,
+                          sourceLabel: type ? `${type} Documents` : 'Documents',
+                        },
+                      })
+                    }
                   >
-                    View
+                    Open detail
                   </button>
                 </td>
               </tr>

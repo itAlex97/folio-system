@@ -1,6 +1,11 @@
 const API_BASE = 'http://127.0.0.1:5052/api';
 
-export async function apiFetch(endpoint: string) {
+export async function apiFetch<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`);
-  return response.json();
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
 }

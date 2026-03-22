@@ -3,7 +3,7 @@ export default function Footer() {
 
   return (
     <footer className="footer">
-      <span>Lear Corporation — Engineering Document Registry System</span>
+      <span>Lear Corporation | Internal Engineering Document Control</span>
 
       <span>Created by Alexis Gutierrez | v0.1 | {year}</span>
     </footer>

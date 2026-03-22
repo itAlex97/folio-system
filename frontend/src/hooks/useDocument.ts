@@ -1,22 +1,30 @@
 import { useEffect, useState } from 'react';
-import { getDocuments } from '../services/documentService';
+import { getDocumentById } from '../services/documentService';
 import type { Document } from '../types/document';
 
-export function useDocuments() {
-  const [documents, setDocuments] = useState<Document[]>([]);
+export function useDocument(id: number | null) {
+  const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadDocuments() {
+    if (id === null) {
+      setLoading(false);
+      setError('Invalid document id.');
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    async function loadDocument() {
       try {
-        const nextDocuments = await getDocuments();
+        const nextDocument = await getDocumentById(id as number);
 
         if (!isMounted) return;
 
-        setDocuments(nextDocuments);
+        setDocument(nextDocument);
         setError('');
       } catch (loadError) {
         if (!isMounted) return;
@@ -24,7 +32,7 @@ export function useDocuments() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : 'Unable to load documents.',
+            : 'Unable to load the document.',
         );
       } finally {
         if (isMounted) {
@@ -33,15 +41,15 @@ export function useDocuments() {
       }
     }
 
-    void loadDocuments();
+    void loadDocument();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [id]);
 
   return {
-    documents,
+    document,
     loading,
     error,
   };
