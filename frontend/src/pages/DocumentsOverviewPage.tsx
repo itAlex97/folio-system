@@ -2,12 +2,17 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import PageHeader from '../components/common/PageHeader';
 import Button from '../components/common/Button';
+import { useAuth } from '../auth/useAuth';
 import { useDocuments } from '../hooks/useDocuments';
 
 export default function DocumentsOverviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { documents, loading, error } = useDocuments();
+  const { user } = useAuth();
+  const userProgramCode = user?.programCode;
+  const { documents, loading, error } = useDocuments({
+    program: userProgramCode,
+  });
   const flashMessage =
     (location.state as { flashMessage?: string } | null)?.flashMessage ?? '';
 
@@ -34,11 +39,14 @@ export default function DocumentsOverviewPage() {
       </PageHeader>
 
       <p className="document-meta">
-        Use this page as the main entry point to review document health by type.
+        Use this page as the main entry point to review document health by type
+        for your program ({userProgramCode ?? 'N/A'}).
       </p>
 
       {flashMessage && <p className="document-meta">{flashMessage}</p>}
-      {loading && <p className="document-meta">Loading documents from backend...</p>}
+      {loading && (
+        <p className="document-meta">Loading documents from backend...</p>
+      )}
       {error && <p className="document-meta">Unable to load data: {error}</p>}
 
       <div className="overview-grid">

@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import DocumentStatusBadge from './DocumentStatusBadge';
+import { useAuth } from '../../auth/useAuth';
 import { useDocuments } from '../../hooks/useDocuments';
 import type { DocumentType } from '../../types/document';
 
@@ -11,12 +12,19 @@ export default function DocumentsTable({ type }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+  const userProgramCode = user?.programCode ?? '';
 
-  const { documents, loading, error } = useDocuments();
+  const { documents, loading, error } = useDocuments({
+    type,
+    program: userProgramCode || undefined,
+  });
 
   const search = searchParams.get('search') ?? '';
   const statusFilter = searchParams.get('status') ?? '';
-  const programFilter = searchParams.get('program') ?? '';
+  const programFilter = searchParams.get('program') ?? userProgramCode;
+  const modelYearFilter = searchParams.get('modelYear') ?? '';
+  const phaseFilter = searchParams.get('phase') ?? '';
   const sortField = searchParams.get('sort') ?? '';
   const sortDirection =
     searchParams.get('direction') === 'desc' ? 'desc' : 'asc';
@@ -54,20 +62,35 @@ export default function DocumentsTable({ type }: Props) {
   }
 
   if (error) {
-    return <div className="loading-state">Unable to load documents: {error}</div>;
+    return (
+      <div className="loading-state">Unable to load documents: {error}</div>
+    );
   }
 
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch = doc.folio
       .toLowerCase()
       .includes(search.toLowerCase());
-
     const matchesStatus = statusFilter === '' || doc.status === statusFilter;
     const matchesProgram =
-      programFilter === '' || doc.program === programFilter;
-    const matchesType = !type || doc.type === type;
+      doc.program === userProgramCode &&
+      (programFilter === '' || doc.program === programFilter);
+    const matchesModelYear =
+      modelYearFilter === '' ||
+      (doc.modelYear ?? '')
+        .toLowerCase()
+        .includes(modelYearFilter.toLowerCase());
+    const matchesPhase =
+      phaseFilter === '' ||
+      (doc.phase ?? '').toLowerCase().includes(phaseFilter.toLowerCase());
 
-    return matchesSearch && matchesStatus && matchesProgram && matchesType;
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesProgram &&
+      matchesModelYear &&
+      matchesPhase
+    );
   });
 
   const sortedDocuments = [...filteredDocuments].sort((a, b) => {
@@ -89,7 +112,12 @@ export default function DocumentsTable({ type }: Props) {
   }
 
   const hasActiveControls =
-    Boolean(search) || Boolean(statusFilter) || Boolean(programFilter) || Boolean(sortField);
+    Boolean(search) ||
+    Boolean(statusFilter) ||
+    Boolean(programFilter) ||
+    Boolean(modelYearFilter) ||
+    Boolean(phaseFilter) ||
+    Boolean(sortField);
 
   return (
     <div className="table-panel">
@@ -114,11 +142,24 @@ export default function DocumentsTable({ type }: Props) {
         <select
           value={programFilter}
           onChange={(e) => updateParams({ program: e.target.value })}
+          disabled
         >
-          <option value="">All Programs</option>
-          <option value="Y2XX">Y2XX</option>
-          <option value="31XX">31XX</option>
+          <option value={userProgramCode}>{userProgramCode || 'N/A'}</option>
         </select>
+
+        <input
+          type="text"
+          placeholder="Model year"
+          value={modelYearFilter}
+          onChange={(e) => updateParams({ modelYear: e.target.value })}
+        />
+
+        <input
+          type="text"
+          placeholder="Phase"
+          value={phaseFilter}
+          onChange={(e) => updateParams({ phase: e.target.value })}
+        />
       </div>
 
       <div className="document-actions">
@@ -153,6 +194,14 @@ export default function DocumentsTable({ type }: Props) {
               Program{renderSortIcon('program')}
             </th>
 
+            <th className="sortable" onClick={() => handleSort('modelYear')}>
+              Model Year{renderSortIcon('modelYear')}
+            </th>
+
+            <th className="sortable" onClick={() => handleSort('phase')}>
+              Phase{renderSortIcon('phase')}
+            </th>
+
             <th>Family</th>
 
             <th>Responsible</th>
@@ -172,7 +221,7 @@ export default function DocumentsTable({ type }: Props) {
         <tbody>
           {sortedDocuments.length === 0 ? (
             <tr>
-              <td colSpan={8} className="no-results">
+              <td colSpan={10} className="no-results">
                 No documents found. Adjust the filters or clear them to see all
                 documents again.
               </td>
@@ -183,6 +232,8 @@ export default function DocumentsTable({ type }: Props) {
                 <td>{doc.folio}</td>
                 <td>{doc.type}</td>
                 <td>{doc.program}</td>
+                <td>{doc.modelYear ?? '-'}</td>
+                <td>{doc.phase ?? '-'}</td>
                 <td>{doc.family}</td>
                 <td>{doc.responsible}</td>
 

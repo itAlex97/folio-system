@@ -9,9 +9,16 @@ export interface Document {
   program: string;
   family: string;
   responsible: string;
+  createdBy: string;
+  modelYear?: string | null;
+  phase?: string | null;
   status: DocumentStatus;
   created: string;
-  title?: string | null;
-  description?: string | null;
   closedAt?: string | null;
+  carLeader?: string | null;
+  changeDescription?: string | null;
+  associatedDocument?: string | null;
+  composite?: string | null;
+  issue?: string | null;
+  target?: string | null;
 }

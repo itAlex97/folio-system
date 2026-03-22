@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import PageHeader from '../components/common/PageHeader';
 import { useDocument } from '../hooks/useDocument';
 import type { Document } from '../types/document';
+import { cancelDocument, closeDocument } from '../services/documentService';
 
 interface DetailNavigationState {
   returnTo?: string;
@@ -19,10 +20,9 @@ export default function DocumentDetailPage() {
   const location = useLocation();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [flashMessage, setFlashMessage] = useState('');
-  const [statusOverride, setStatusOverride] = useState<{
-    documentId: number;
-    status: Document['status'];
-  } | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [documentOverride, setDocumentOverride] = useState<Document | null>(null);
 
   const navigationState =
     (location.state as DetailNavigationState | null) ?? null;
@@ -30,10 +30,11 @@ export default function DocumentDetailPage() {
   const sourceLabel = navigationState?.sourceLabel ?? 'Documents';
   const numericId = id ? Number(id) : null;
   const { document, loading, error } = useDocument(numericId);
-  const currentStatus =
-    document && statusOverride?.documentId === document.id
-      ? statusOverride.status
-      : document?.status ?? null;
+  const effectiveDocument =
+    documentOverride && document && documentOverride.id === document.id
+      ? documentOverride
+      : document;
+  const currentStatus = effectiveDocument?.status ?? null;
 
   if (loading) {
     return (
@@ -49,7 +50,7 @@ export default function DocumentDetailPage() {
     );
   }
 
-  if (!document || !currentStatus) {
+  if (!effectiveDocument || !currentStatus) {
     return (
       <MainLayout>
         <PageHeader title={`Document ${id ?? ''}`}>
@@ -65,36 +66,43 @@ export default function DocumentDetailPage() {
     );
   }
 
-  const documentWithStatus: Document = {
-    ...document,
-    status: currentStatus,
-  };
-
   return (
     <MainLayout>
-      <PageHeader title={`Document ${document.folio}`}>
+      <PageHeader title={`Document ${effectiveDocument.folio}`}>
         <Button variant="secondary" onClick={() => navigate(returnTo)}>
           Back to list
         </Button>
       </PageHeader>
 
       <p className="document-meta">
-        {sourceLabel} / {document.type} / {document.folio}
+        {sourceLabel} / {effectiveDocument.type} / {effectiveDocument.folio}
       </p>
 
       {flashMessage && <p className="document-meta">{flashMessage}</p>}
+      {actionError && <p className="document-meta">Unable to update document: {actionError}</p>}
 
-      <DocumentDetail document={documentWithStatus} />
+      <DocumentDetail document={effectiveDocument} />
 
       <div className="document-actions">
         <Button
-          disabled={currentStatus !== 'OPEN'}
-          onClick={() => {
-            setStatusOverride({
-              documentId: document.id,
-              status: 'CLOSED',
-            });
-            setFlashMessage('Document closed successfully.');
+          disabled={currentStatus !== 'OPEN' || isSubmitting}
+          onClick={async () => {
+            try {
+              setIsSubmitting(true);
+              setActionError('');
+
+              const updatedDocument = await closeDocument(effectiveDocument.id);
+              setDocumentOverride(updatedDocument);
+              setFlashMessage('Document closed successfully.');
+            } catch (submitIssue) {
+              setActionError(
+                submitIssue instanceof Error
+                  ? submitIssue.message
+                  : 'Unable to close document.',
+              );
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         >
           Close Document
@@ -102,7 +110,7 @@ export default function DocumentDetailPage() {
 
         <Button
           variant="danger"
-          disabled={currentStatus === 'CANCELLED'}
+          disabled={currentStatus !== 'OPEN' || isSubmitting}
           onClick={() => setShowCancelDialog(true)}
         >
           Cancel Document
@@ -113,14 +121,29 @@ export default function DocumentDetailPage() {
         <ConfirmDialog
           title="Cancel Document"
           message="Are you sure you want to cancel this document?"
-          onCancel={() => setShowCancelDialog(false)}
-          onConfirm={() => {
-            setStatusOverride({
-              documentId: document.id,
-              status: 'CANCELLED',
-            });
-            setFlashMessage('Document cancelled successfully.');
-            setShowCancelDialog(false);
+          onCancel={() => {
+            if (!isSubmitting) {
+              setShowCancelDialog(false);
+            }
+          }}
+          onConfirm={async () => {
+            try {
+              setIsSubmitting(true);
+              setActionError('');
+
+              const updatedDocument = await cancelDocument(effectiveDocument.id);
+              setDocumentOverride(updatedDocument);
+              setFlashMessage('Document cancelled successfully.');
+              setShowCancelDialog(false);
+            } catch (submitIssue) {
+              setActionError(
+                submitIssue instanceof Error
+                  ? submitIssue.message
+                  : 'Unable to cancel document.',
+              );
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         />
       )}

@@ -1,16 +1,43 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../auth/useAuth';
 import Button from '../components/common/Button';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const { login } = useAuth();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!email || !password) return;
-    navigate('/');
+
+    if (!username || !password) {
+      return;
+    }
+
+    const nextPath =
+      ((location.state as { from?: { pathname?: string } } | null)?.from
+        ?.pathname as string | undefined) ?? '/documents';
+
+    try {
+      setSubmitting(true);
+      setError('');
+      await login(username.trim(), password);
+      navigate(nextPath, { replace: true });
+    } catch (loginError) {
+      setError(
+        loginError instanceof Error
+          ? loginError.message
+          : 'Unable to sign in with provided credentials.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -22,16 +49,16 @@ export default function LoginPage() {
         </p>
 
         <div className="login-group">
-          <label className="login-label" htmlFor="email">
-            Email
+          <label className="login-label" htmlFor="username">
+            User
           </label>
           <input
-            id="email"
+            id="username"
             className="login-input"
-            type="email"
-            placeholder="name@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="agutierrez11"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
         </div>
 
@@ -50,8 +77,12 @@ export default function LoginPage() {
         </div>
 
         <div className="login-actions">
-          <Button disabled={!email || !password}>Sign In</Button>
+          <Button disabled={!username || !password || submitting}>
+            {submitting ? 'Signing In...' : 'Sign In'}
+          </Button>
         </div>
+
+        {error && <p className="login-error">{error}</p>}
       </form>
     </div>
   );

@@ -8,9 +8,16 @@ public sealed class EngineeringChangeDto
     public string Program { get; init; } = string.Empty;
     public string Family { get; init; } = string.Empty;
     public string Responsible { get; init; } = string.Empty;
+    public string CreatedBy { get; init; } = string.Empty;
+    public string? ModelYear { get; init; }
+    public string? Phase { get; init; }
     public string Status { get; init; } = string.Empty;
     public string Created { get; init; } = string.Empty;
-    public string? Title { get; init; }
-    public string? Description { get; init; }
     public string? ClosedAt { get; init; }
+    public string? CarLeader { get; init; }
+    public string? ChangeDescription { get; init; }
+    public string? AssociatedDocument { get; init; }
+    public string? Composite { get; init; }
+    public string? Issue { get; init; }
+    public string? Target { get; init; }
 }

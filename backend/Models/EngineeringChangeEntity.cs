@@ -8,8 +8,9 @@ public class EngineeringChangeEntity
     public int DocumentTypeId { get; set; }
     public int FamilyId { get; set; }
     public int ResponsibleEngineerId { get; set; }
-    public string? Title { get; set; }
-    public string? Description { get; set; }
+    public int CreatedByUserId { get; set; }
+    public string? ModelYear { get; set; }
+    public string? Phase { get; set; }
     public string Status { get; set; } = "OPEN";
     public DateTime CreatedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
@@ -18,4 +19,8 @@ public class EngineeringChangeEntity
     public DocumentTypeEntity DocumentType { get; set; } = null!;
     public FamilyEntity Family { get; set; } = null!;
     public UserEntity ResponsibleEngineer { get; set; } = null!;
+    public UserEntity CreatedByUser { get; set; } = null!;
+    public EngineeringChangeBcnDetailEntity? BcnDetail { get; set; }
+    public EngineeringChangeDcnDetailEntity? DcnDetail { get; set; }
+    public EngineeringChangeDfmDetailEntity? DfmDetail { get; set; }
 }

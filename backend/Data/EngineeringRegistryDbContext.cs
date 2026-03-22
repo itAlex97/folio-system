@@ -10,7 +10,11 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
     public DbSet<FamilyEntity> Families => Set<FamilyEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<DocumentTypeEntity> DocumentTypes => Set<DocumentTypeEntity>();
+    public DbSet<SequenceControlEntity> SequenceControls => Set<SequenceControlEntity>();
     public DbSet<EngineeringChangeEntity> EngineeringChanges => Set<EngineeringChangeEntity>();
+    public DbSet<EngineeringChangeBcnDetailEntity> EngineeringChangeBcnDetails => Set<EngineeringChangeBcnDetailEntity>();
+    public DbSet<EngineeringChangeDcnDetailEntity> EngineeringChangeDcnDetails => Set<EngineeringChangeDcnDetailEntity>();
+    public DbSet<EngineeringChangeDfmDetailEntity> EngineeringChangeDfmDetails => Set<EngineeringChangeDfmDetailEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,10 +43,11 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.ToTable("Users");
             entity.HasKey(user => user.Id);
             entity.Property(user => user.Name).HasMaxLength(100).IsRequired();
-            entity.Property(user => user.Email).HasMaxLength(100);
+            entity.Property(user => user.Username).HasMaxLength(50).IsRequired();
+            entity.Property(user => user.PasswordHash).HasMaxLength(255).IsRequired();
             entity.Property(user => user.Role).HasMaxLength(20).IsRequired();
             entity.Property(user => user.IsActive).HasDefaultValue(true);
-            entity.HasIndex(user => user.Email).IsUnique();
+            entity.HasIndex(user => user.Username).IsUnique();
 
             entity.HasOne(user => user.Program)
                 .WithMany(program => program.Users)
@@ -58,12 +63,34 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.HasIndex(documentType => documentType.Code).IsUnique();
         });
 
+        modelBuilder.Entity<SequenceControlEntity>(entity =>
+        {
+            entity.ToTable("SequenceControl");
+            entity.HasKey(sequence => sequence.Id);
+            entity.Property(sequence => sequence.CurrentSequence).HasDefaultValue(0);
+            entity.HasIndex(sequence => new
+            {
+                sequence.ProgramId,
+                sequence.DocumentTypeId,
+                sequence.Year
+            }).IsUnique();
+
+            entity.HasOne(sequence => sequence.Program)
+                .WithMany()
+                .HasForeignKey(sequence => sequence.ProgramId);
+
+            entity.HasOne(sequence => sequence.DocumentType)
+                .WithMany()
+                .HasForeignKey(sequence => sequence.DocumentTypeId);
+        });
+
         modelBuilder.Entity<EngineeringChangeEntity>(entity =>
         {
             entity.ToTable("EngineeringChanges");
             entity.HasKey(change => change.Id);
             entity.Property(change => change.Folio).HasMaxLength(50).IsRequired();
-            entity.Property(change => change.Title).HasMaxLength(200);
+            entity.Property(change => change.ModelYear).HasMaxLength(20);
+            entity.Property(change => change.Phase).HasMaxLength(30);
             entity.Property(change => change.Status).HasMaxLength(20).IsRequired();
             entity.Property(change => change.CreatedAt).HasColumnType("datetime2");
             entity.Property(change => change.ClosedAt).HasColumnType("datetime2");
@@ -84,6 +111,41 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.HasOne(change => change.ResponsibleEngineer)
                 .WithMany(user => user.ResponsibleEngineeringChanges)
                 .HasForeignKey(change => change.ResponsibleEngineerId);
+
+            entity.HasOne(change => change.CreatedByUser)
+                .WithMany(user => user.CreatedEngineeringChanges)
+                .HasForeignKey(change => change.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EngineeringChangeBcnDetailEntity>(entity =>
+        {
+            entity.ToTable("EngineeringChangeBcnDetails");
+            entity.HasKey(detail => detail.EngineeringChangeId);
+
+            entity.HasOne(detail => detail.EngineeringChange)
+                .WithOne(change => change.BcnDetail)
+                .HasForeignKey<EngineeringChangeBcnDetailEntity>(detail => detail.EngineeringChangeId);
+        });
+
+        modelBuilder.Entity<EngineeringChangeDcnDetailEntity>(entity =>
+        {
+            entity.ToTable("EngineeringChangeDcnDetails");
+            entity.HasKey(detail => detail.EngineeringChangeId);
+
+            entity.HasOne(detail => detail.EngineeringChange)
+                .WithOne(change => change.DcnDetail)
+                .HasForeignKey<EngineeringChangeDcnDetailEntity>(detail => detail.EngineeringChangeId);
+        });
+
+        modelBuilder.Entity<EngineeringChangeDfmDetailEntity>(entity =>
+        {
+            entity.ToTable("EngineeringChangeDfmDetails");
+            entity.HasKey(detail => detail.EngineeringChangeId);
+
+            entity.HasOne(detail => detail.EngineeringChange)
+                .WithOne(change => change.DfmDetail)
+                .HasForeignKey<EngineeringChangeDfmDetailEntity>(detail => detail.EngineeringChangeId);
         });
     }
 }
