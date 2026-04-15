@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { ArrowLeft, Save, X } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
 import PageHeader from '../components/common/PageHeader';
 import DocumentForm from '../components/documents/DocumentForm';
@@ -34,12 +35,40 @@ export default function CreateDocumentPage() {
   const prefillProgramCode = user?.programCode ?? '';
   const returnTo = navigationState?.returnTo ?? '/documents';
   const sourceLabel = navigationState?.sourceLabel ?? 'Documents';
+  const prefilledTypeLabel =
+    options?.documentTypes.find(
+      (documentType) => documentType.code === prefillType,
+    )?.name ?? prefillType;
+  const prefilledProgramLabel =
+    options?.programs.find((program) => program.code === prefillProgramCode)
+      ?.name ?? prefillProgramCode;
 
   return (
     <MainLayout>
       <PageHeader title="Create Document">
         <Button variant="secondary" onClick={() => navigate(returnTo)}>
-          Back to list
+          <ArrowLeft size={16} className="button-icon" />
+          Back
+        </Button>
+
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={loading || submitting}
+          onClick={() => navigate(returnTo)}
+        >
+          <X size={16} className="button-icon" />
+          Cancel
+        </Button>
+
+        <Button
+          type="submit"
+          form="create-document-form"
+          variant="success"
+          disabled={loading || submitting || !options}
+        >
+          <Save size={16} className="button-icon" />
+          Save
         </Button>
       </PageHeader>
 
@@ -48,7 +77,28 @@ export default function CreateDocumentPage() {
       </p>
 
       {options && (
+        <div className="form-fixed-context" aria-label="Fixed document context">
+          <span className="fixed-context-label">Fixed values</span>
+          <span className="fixed-context-chip">
+            Type:{' '}
+            {prefillType ? `${prefillType} - ${prefilledTypeLabel}` : 'Manual'}
+          </span>
+          <span className="fixed-context-chip">
+            Program:{' '}
+            {prefillProgramCode
+              ? `${prefillProgramCode} - ${prefilledProgramLabel}`
+              : 'Manual'}
+          </span>
+        </div>
+      )}
+
+      {options && (
         <DocumentForm
+          className="create-document-form"
+          formId="create-document-form"
+          showFormActions={false}
+          hideLockedFields
+          submitLabel="Save"
           initialType={prefillType}
           isTypeLocked={Boolean(prefillType)}
           initialProgramCode={prefillProgramCode}

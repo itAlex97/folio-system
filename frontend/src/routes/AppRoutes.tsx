@@ -13,6 +13,9 @@ import DocumentDetailPage from '../pages/DocumentDetailPage';
 import CreateDocumentPage from '../pages/CreateDocumentPage';
 import DocumentsOverviewPage from '../pages/DocumentsOverviewPage';
 import DocumentsTypePage from '../pages/DocumentsTypePage';
+import AdminUsersPage from '../pages/AdminUsersPage';
+import AdminCatalogsPage from '../pages/AdminCatalogsPage';
+import AdminReportsPage from '../pages/AdminReportsPage';
 
 function RequireAuth() {
   const { isAuthenticated } = useAuth();
@@ -33,6 +36,17 @@ function LoginRoute() {
   }
 
   return <LoginPage />;
+}
+
+function RequireAdmin() {
+  const { user } = useAuth();
+  const normalizedRole = user?.role?.toUpperCase() ?? '';
+
+  if (normalizedRole !== 'ADMIN') {
+    return <Navigate to="/documents" replace />;
+  }
+
+  return <Outlet />;
 }
 
 export default function AppRoutes() {
@@ -58,6 +72,12 @@ export default function AppRoutes() {
             path="/documents/dfm"
             element={<DocumentsTypePage type="DFM" />}
           />
+
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/catalogs" element={<AdminCatalogsPage />} />
+            <Route path="/admin/reports" element={<AdminReportsPage />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

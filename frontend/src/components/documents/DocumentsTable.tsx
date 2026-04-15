@@ -1,4 +1,5 @@
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronUp, ChevronDown, Eye, FilterX } from 'lucide-react';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { useAuth } from '../../auth/useAuth';
 import { useDocuments } from '../../hooks/useDocuments';
@@ -13,16 +14,22 @@ export default function DocumentsTable({ type }: Props) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const normalizedRole = user?.role?.toUpperCase() ?? '';
+  const isAdmin = normalizedRole === 'ADMIN';
   const userProgramCode = user?.programCode ?? '';
 
   const { documents, loading, error } = useDocuments({
     type,
-    program: userProgramCode || undefined,
+    program: isAdmin
+      ? searchParams.get('program') || undefined
+      : userProgramCode || undefined,
   });
 
   const search = searchParams.get('search') ?? '';
   const statusFilter = searchParams.get('status') ?? '';
-  const programFilter = searchParams.get('program') ?? userProgramCode;
+  const programFilter = isAdmin
+    ? (searchParams.get('program') ?? '')
+    : userProgramCode;
   const modelYearFilter = searchParams.get('modelYear') ?? '';
   const phaseFilter = searchParams.get('phase') ?? '';
   const sortField = searchParams.get('sort') ?? '';
@@ -72,9 +79,9 @@ export default function DocumentsTable({ type }: Props) {
       .toLowerCase()
       .includes(search.toLowerCase());
     const matchesStatus = statusFilter === '' || doc.status === statusFilter;
-    const matchesProgram =
-      doc.program === userProgramCode &&
-      (programFilter === '' || doc.program === programFilter);
+    const matchesProgram = isAdmin
+      ? programFilter === '' || doc.program === programFilter
+      : doc.program === userProgramCode;
     const matchesModelYear =
       modelYearFilter === '' ||
       (doc.modelYear ?? '')
@@ -106,22 +113,33 @@ export default function DocumentsTable({ type }: Props) {
   });
 
   function renderSortIcon(field: string) {
-    if (sortField !== field) return '';
+    if (sortField !== field) return null;
 
-    return sortDirection === 'asc' ? ' ↑' : ' ↓';
+    return sortDirection === 'asc' ? (
+      <ChevronUp size={16} className="sort-icon" />
+    ) : (
+      <ChevronDown size={16} className="sort-icon" />
+    );
   }
 
-  const hasActiveControls =
+  const programOptions = Array.from(
+    new Set(documents.map((doc) => doc.program)),
+  )
+    .filter((program) => program)
+    .sort((a, b) => a.localeCompare(b));
+
+  const hasActiveFilters =
     Boolean(search) ||
     Boolean(statusFilter) ||
-    Boolean(programFilter) ||
+    (isAdmin && Boolean(programFilter)) ||
     Boolean(modelYearFilter) ||
-    Boolean(phaseFilter) ||
-    Boolean(sortField);
+    Boolean(phaseFilter);
 
   return (
     <div className="table-panel">
-      <div className="table-filters">
+      <div
+        className={`table-filters ${isAdmin ? 'table-filters-admin' : 'table-filters-user'}`}
+      >
         <input
           type="text"
           placeholder="Search by folio"
@@ -139,13 +157,19 @@ export default function DocumentsTable({ type }: Props) {
           <option value="CANCELLED">CANCELLED</option>
         </select>
 
-        <select
-          value={programFilter}
-          onChange={(e) => updateParams({ program: e.target.value })}
-          disabled
-        >
-          <option value={userProgramCode}>{userProgramCode || 'N/A'}</option>
-        </select>
+        {isAdmin && (
+          <select
+            value={programFilter}
+            onChange={(e) => updateParams({ program: e.target.value })}
+          >
+            <option value="">All Programs</option>
+            {programOptions.map((program) => (
+              <option key={program} value={program}>
+                {program}
+              </option>
+            ))}
+          </select>
+        )}
 
         <input
           type="text"
@@ -160,6 +184,26 @@ export default function DocumentsTable({ type }: Props) {
           value={phaseFilter}
           onChange={(e) => updateParams({ phase: e.target.value })}
         />
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            className="table-action table-filter-clear-icon"
+            title="Clear filters"
+            aria-label="Clear filters"
+            onClick={() =>
+              updateParams({
+                search: '',
+                status: '',
+                program: '',
+                modelYear: '',
+                phase: '',
+              })
+            }
+          >
+            <FilterX size={16} />
+          </button>
+        )}
       </div>
 
       <div className="document-actions">
@@ -167,103 +211,98 @@ export default function DocumentsTable({ type }: Props) {
           Showing {sortedDocuments.length} of {documents.length} documents
           {type ? ` in ${type}` : ''}.
         </p>
-
-        {hasActiveControls && (
-          <button
-            type="button"
-            className="table-action"
-            onClick={() => setSearchParams(new URLSearchParams())}
-          >
-            Clear filters and sorting
-          </button>
-        )}
       </div>
 
-      <table className="documents-table">
-        <thead>
-          <tr>
-            <th className="sortable" onClick={() => handleSort('folio')}>
-              Folio{renderSortIcon('folio')}
-            </th>
-
-            <th className="sortable" onClick={() => handleSort('type')}>
-              Type{renderSortIcon('type')}
-            </th>
-
-            <th className="sortable" onClick={() => handleSort('program')}>
-              Program{renderSortIcon('program')}
-            </th>
-
-            <th className="sortable" onClick={() => handleSort('modelYear')}>
-              Model Year{renderSortIcon('modelYear')}
-            </th>
-
-            <th className="sortable" onClick={() => handleSort('phase')}>
-              Phase{renderSortIcon('phase')}
-            </th>
-
-            <th>Family</th>
-
-            <th>Responsible</th>
-
-            <th className="sortable" onClick={() => handleSort('status')}>
-              Status{renderSortIcon('status')}
-            </th>
-
-            <th className="sortable" onClick={() => handleSort('created')}>
-              Created{renderSortIcon('created')}
-            </th>
-
-            <th>Actions</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {sortedDocuments.length === 0 ? (
+      <div className="documents-table-wrap">
+        <table className="documents-table">
+          <thead>
             <tr>
-              <td colSpan={10} className="no-results">
-                No documents found. Adjust the filters or clear them to see all
-                documents again.
-              </td>
+              <th className="sortable" onClick={() => handleSort('folio')}>
+                Folio{renderSortIcon('folio')}
+              </th>
+
+              <th className="sortable" onClick={() => handleSort('type')}>
+                Type{renderSortIcon('type')}
+              </th>
+
+              <th className="sortable" onClick={() => handleSort('program')}>
+                Program{renderSortIcon('program')}
+              </th>
+
+              <th className="sortable" onClick={() => handleSort('modelYear')}>
+                Model Year{renderSortIcon('modelYear')}
+              </th>
+
+              <th className="sortable" onClick={() => handleSort('phase')}>
+                Phase{renderSortIcon('phase')}
+              </th>
+
+              <th>Family</th>
+
+              <th>Responsible</th>
+
+              <th className="sortable" onClick={() => handleSort('status')}>
+                Status{renderSortIcon('status')}
+              </th>
+
+              <th className="sortable" onClick={() => handleSort('created')}>
+                Created{renderSortIcon('created')}
+              </th>
+
+              <th>Actions</th>
             </tr>
-          ) : (
-            sortedDocuments.map((doc) => (
-              <tr key={doc.id}>
-                <td>{doc.folio}</td>
-                <td>{doc.type}</td>
-                <td>{doc.program}</td>
-                <td>{doc.modelYear ?? '-'}</td>
-                <td>{doc.phase ?? '-'}</td>
-                <td>{doc.family}</td>
-                <td>{doc.responsible}</td>
+          </thead>
 
-                <td>
-                  <DocumentStatusBadge status={doc.status} />
-                </td>
-
-                <td>{doc.created}</td>
-
-                <td>
-                  <button
-                    type="button"
-                    className="table-action"
-                    onClick={() =>
-                      navigate(`/documents/${doc.id}`, {
-                        state: {
-                          returnTo: `${location.pathname}${location.search}`,
-                          sourceLabel: type ? `${type} Documents` : 'Documents',
-                        },
-                      })
-                    }
-                  >
-                    Open detail
-                  </button>
+          <tbody>
+            {sortedDocuments.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="no-results">
+                  No documents found. Adjust the filters or clear them to see
+                  all documents again.
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              sortedDocuments.map((doc) => (
+                <tr key={doc.id}>
+                  <td>{doc.folio}</td>
+                  <td>{doc.type}</td>
+                  <td>{doc.program}</td>
+                  <td>{doc.modelYear ?? '-'}</td>
+                  <td>{doc.phase ?? '-'}</td>
+                  <td>{doc.family}</td>
+                  <td>{doc.responsible}</td>
+
+                  <td>
+                    <DocumentStatusBadge status={doc.status} />
+                  </td>
+
+                  <td>{doc.created}</td>
+
+                  <td>
+                    <button
+                      type="button"
+                      className="table-action"
+                      onClick={() =>
+                        navigate(`/documents/${doc.id}`, {
+                          state: {
+                            returnTo: `${location.pathname}${location.search}`,
+                            sourceLabel: type
+                              ? `${type} Documents`
+                              : 'Documents',
+                          },
+                        })
+                      }
+                    >
+                      <Eye size={16} className="table-action-icon" />
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

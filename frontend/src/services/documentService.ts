@@ -3,6 +3,8 @@ import type { Document, DocumentStatus, DocumentType } from '../types/document';
 
 interface EngineeringChangeApiResponse {
   id: number;
+  familyId: number;
+  responsibleEngineerId: number;
   folio: string;
   type: string;
   program: string;
@@ -37,6 +39,20 @@ interface CreateEngineeringChangeRequest {
   target?: string;
 }
 
+interface UpdateEngineeringChangeRequest {
+  familyId: number;
+  responsibleEngineerId: number;
+  reassignmentReason?: string;
+  modelYear: string;
+  phase: string;
+  carLeader?: string;
+  changeDescription?: string;
+  associatedDocument?: string;
+  composite?: string;
+  issue?: string;
+  target?: string;
+}
+
 interface DocumentQuery {
   search?: string;
   type?: DocumentType;
@@ -49,6 +65,8 @@ interface DocumentQuery {
 function mapDocument(apiDocument: EngineeringChangeApiResponse): Document {
   return {
     id: apiDocument.id,
+    familyId: apiDocument.familyId,
+    responsibleEngineerId: apiDocument.responsibleEngineerId,
     folio: apiDocument.folio,
     type: apiDocument.type as DocumentType,
     program: apiDocument.program,
@@ -124,6 +142,35 @@ export async function createDocument(
   return mapDocument(document);
 }
 
+export async function updateDocument(
+  id: number,
+  payload: UpdateEngineeringChangeRequest,
+): Promise<Document> {
+  const response = await fetch(`${API_BASE}/engineering-changes/${id}`, {
+    method: 'PATCH',
+    headers: buildApiHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+
+    try {
+      const errorBody = (await response.json()) as { message?: string };
+      if (errorBody.message) {
+        message = errorBody.message;
+      }
+    } catch {
+      // Keep fallback message.
+    }
+
+    throw new Error(message);
+  }
+
+  const document = (await response.json()) as EngineeringChangeApiResponse;
+  return mapDocument(document);
+}
+
 async function patchDocumentStatus(
   id: number,
   action: 'close' | 'cancel',
@@ -155,10 +202,81 @@ async function patchDocumentStatus(
   return mapDocument(document);
 }
 
+async function patchDocumentStatusWithBody(
+  id: number,
+  action: 'reopen' | 'status',
+  payload: { status?: DocumentStatus; reason: string },
+): Promise<Document> {
+  const response = await fetch(
+    `${API_BASE}/engineering-changes/${id}/${action}`,
+    {
+      method: 'PATCH',
+      headers: buildApiHeaders(true),
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+
+    try {
+      const errorBody = (await response.json()) as { message?: string };
+      if (errorBody.message) {
+        message = errorBody.message;
+      }
+    } catch {
+      // Keep fallback message.
+    }
+
+    throw new Error(message);
+  }
+
+  const document = (await response.json()) as EngineeringChangeApiResponse;
+  return mapDocument(document);
+}
+
 export function closeDocument(id: number): Promise<Document> {
   return patchDocumentStatus(id, 'close');
 }
 
 export function cancelDocument(id: number): Promise<Document> {
   return patchDocumentStatus(id, 'cancel');
+}
+
+export function reopenDocument(id: number, reason: string): Promise<Document> {
+  return patchDocumentStatusWithBody(id, 'reopen', { reason });
+}
+
+export function changeDocumentStatus(
+  id: number,
+  status: DocumentStatus,
+  reason: string,
+): Promise<Document> {
+  return patchDocumentStatusWithBody(id, 'status', { status, reason });
+}
+
+export async function deleteDocument(
+  id: number,
+  reason: string,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/engineering-changes/${id}`, {
+    method: 'DELETE',
+    headers: buildApiHeaders(true),
+    body: JSON.stringify({ reason }),
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+
+    try {
+      const errorBody = (await response.json()) as { message?: string };
+      if (errorBody.message) {
+        message = errorBody.message;
+      }
+    } catch {
+      // Keep fallback message.
+    }
+
+    throw new Error(message);
+  }
 }

@@ -39,6 +39,10 @@ bin/
 obj/
 .dotnet/
 .nuget/
+temp-build*/
+
+# local backend publish/build scratch folders
+backend/backend/
 
 # =========================
 # Environment variables

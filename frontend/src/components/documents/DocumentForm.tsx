@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Button from '../common/Button';
 import type { DocumentType } from '../../types/document';
 import type { DocumentFormOptions } from '../../types/formOptions';
@@ -12,6 +12,26 @@ interface Props {
   options: DocumentFormOptions;
   loading?: boolean;
   error?: string;
+  submitLabel?: string;
+  showReassignmentReason?: boolean;
+  initialResponsibleEngineerId?: number;
+  className?: string;
+  formId?: string;
+  showFormActions?: boolean;
+  hideLockedFields?: boolean;
+  initialValues?: {
+    familyId?: number;
+    responsibleEngineerId?: number;
+    modelYear?: string;
+    phase?: string;
+    carLeader?: string;
+    changeDescription?: string;
+    associatedDocument?: string;
+    composite?: string;
+    issue?: string;
+    target?: string;
+    reassignmentReason?: string;
+  };
   onSubmit?: (values: {
     type: DocumentType;
     programCode: string;
@@ -25,6 +45,7 @@ interface Props {
     composite?: string;
     issue?: string;
     target?: string;
+    reassignmentReason?: string;
   }) => void;
 }
 
@@ -37,20 +58,43 @@ export default function DocumentForm({
   options,
   loading = false,
   error = '',
+  submitLabel = 'Create Document',
+  showReassignmentReason = false,
+  initialResponsibleEngineerId,
+  className = '',
+  formId,
+  showFormActions = true,
+  hideLockedFields = false,
+  initialValues,
   onSubmit,
 }: Props) {
   const [type, setType] = useState(initialType);
   const [programCode, setProgramCode] = useState(initialProgramCode);
-  const [familyId, setFamilyId] = useState('');
-  const [responsibleEngineerId, setResponsibleEngineerId] = useState('');
-  const [modelYear, setModelYear] = useState('');
-  const [phase, setPhase] = useState('');
-  const [carLeader, setCarLeader] = useState('');
-  const [changeDescription, setChangeDescription] = useState('');
-  const [associatedDocument, setAssociatedDocument] = useState('');
-  const [composite, setComposite] = useState('');
-  const [issue, setIssue] = useState('');
-  const [target, setTarget] = useState('');
+  const [familyId, setFamilyId] = useState(() =>
+    initialValues?.familyId ? String(initialValues.familyId) : '',
+  );
+  const [responsibleEngineerId, setResponsibleEngineerId] = useState(() =>
+    initialValues?.responsibleEngineerId
+      ? String(initialValues.responsibleEngineerId)
+      : '',
+  );
+  const [modelYear, setModelYear] = useState(initialValues?.modelYear ?? '');
+  const [phase, setPhase] = useState(initialValues?.phase ?? '');
+  const [carLeader, setCarLeader] = useState(
+    initialValues?.carLeader ?? '',
+  );
+  const [changeDescription, setChangeDescription] = useState(
+    initialValues?.changeDescription ?? '',
+  );
+  const [associatedDocument, setAssociatedDocument] = useState(
+    initialValues?.associatedDocument ?? '',
+  );
+  const [composite, setComposite] = useState(initialValues?.composite ?? '');
+  const [issue, setIssue] = useState(initialValues?.issue ?? '');
+  const [target, setTarget] = useState(initialValues?.target ?? '');
+  const [reassignmentReason, setReassignmentReason] = useState(
+    initialValues?.reassignmentReason ?? '',
+  );
   const [errors, setErrors] = useState({
     type: '',
     programCode: '',
@@ -64,6 +108,7 @@ export default function DocumentForm({
     composite: '',
     issue: '',
     target: '',
+    reassignmentReason: '',
   });
 
   const filteredFamilies = useMemo(
@@ -88,16 +133,6 @@ export default function DocumentForm({
     modelYear &&
     phase;
 
-  useEffect(() => {
-    if (!initialProgramCode) {
-      return;
-    }
-
-    setProgramCode(initialProgramCode);
-    setFamilyId('');
-    setResponsibleEngineerId('');
-  }, [initialProgramCode]);
-
   function handleProgramChange(nextProgramCode: string) {
     setProgramCode(nextProgramCode);
     setFamilyId('');
@@ -118,6 +153,7 @@ export default function DocumentForm({
       composite: '',
       issue: '',
       target: '',
+      reassignmentReason: '',
     };
 
     if (!type) newErrors.type = 'Document type is required';
@@ -153,6 +189,19 @@ export default function DocumentForm({
       }
     }
 
+    const isReassigningResponsible =
+      Boolean(initialResponsibleEngineerId) &&
+      Number(responsibleEngineerId) !== initialResponsibleEngineerId;
+
+    if (
+      showReassignmentReason &&
+      isReassigningResponsible &&
+      !reassignmentReason.trim()
+    ) {
+      newErrors.reassignmentReason =
+        'Reassignment reason is required when changing responsible engineer';
+    }
+
     setErrors(newErrors);
 
     return !Object.values(newErrors).some((fieldError) => fieldError !== '');
@@ -176,60 +225,73 @@ export default function DocumentForm({
       composite: composite || undefined,
       issue: issue || undefined,
       target: target || undefined,
+      reassignmentReason: reassignmentReason || undefined,
     });
   }
 
   return (
-    <form className="document-form" onSubmit={handleSubmit}>
+    <form
+      id={formId}
+      className={`document-form ${className}`.trim()}
+      onSubmit={handleSubmit}
+    >
       {loading && <span className="form-hint">Loading form options...</span>}
       {error && (
         <span className="form-error">Unable to load options: {error}</span>
       )}
 
-      <div className="form-field">
-        <label>Document Type</label>
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as DocumentType | '')}
-          disabled={isTypeLocked || loading}
-        >
-          <option value="">Select type</option>
-          {options.documentTypes.map((documentType) => (
-            <option key={documentType.code} value={documentType.code}>
-              {documentType.code} - {documentType.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {isTypeLocked && (
-        <span className="form-hint">
-          Document type is set by the current table.
-        </span>
+      {!(hideLockedFields && isTypeLocked) && (
+        <>
+          <div className="form-field">
+            <label>Document Type</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as DocumentType | '')}
+              disabled={isTypeLocked || loading}
+            >
+              <option value="">Select type</option>
+              {options.documentTypes.map((documentType) => (
+                <option key={documentType.code} value={documentType.code}>
+                  {documentType.code} - {documentType.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {isTypeLocked && (
+            <span className="form-hint">
+              Document type is set by the current table.
+            </span>
+          )}
+          {errors.type && <span className="form-error">{errors.type}</span>}
+        </>
       )}
-      {errors.type && <span className="form-error">{errors.type}</span>}
 
-      <div className="form-field">
-        <label>Program</label>
-        <select
-          value={programCode}
-          onChange={(e) => handleProgramChange(e.target.value)}
-          disabled={loading || isProgramLocked}
-        >
-          <option value="">Select program</option>
-          {options.programs.map((program) => (
-            <option key={program.code} value={program.code}>
-              {program.code} - {program.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {isProgramLocked && (
-        <span className="form-hint">
-          Program is set automatically from your user profile.
-        </span>
-      )}
-      {errors.programCode && (
-        <span className="form-error">{errors.programCode}</span>
+      {!(hideLockedFields && isProgramLocked) && (
+        <>
+          <div className="form-field">
+            <label>Program</label>
+            <select
+              value={programCode}
+              onChange={(e) => handleProgramChange(e.target.value)}
+              disabled={loading || isProgramLocked}
+            >
+              <option value="">Select program</option>
+              {options.programs.map((program) => (
+                <option key={program.code} value={program.code}>
+                  {program.code} - {program.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {isProgramLocked && (
+            <span className="form-hint">
+              Program is set automatically from your user profile.
+            </span>
+          )}
+          {errors.programCode && (
+            <span className="form-error">{errors.programCode}</span>
+          )}
+        </>
       )}
 
       <div className="form-field">
@@ -388,17 +450,35 @@ export default function DocumentForm({
         <span className="form-error">{errors.changeDescription}</span>
       )}
 
-      <div className="form-actions">
-        <Button
-          type="submit"
-          disabled={!isFormValid || loading || Boolean(error)}
-        >
-          Create Document
-        </Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+      {showReassignmentReason && (
+        <div className="form-field">
+          <label>Reassignment Reason</label>
+          <input
+            type="text"
+            value={reassignmentReason}
+            onChange={(e) => setReassignmentReason(e.target.value)}
+            placeholder="Required only when changing responsible engineer"
+            disabled={loading}
+          />
+        </div>
+      )}
+      {errors.reassignmentReason && (
+        <span className="form-error">{errors.reassignmentReason}</span>
+      )}
+
+      {showFormActions && (
+        <div className="form-actions">
+          <Button
+            type="submit"
+            disabled={!isFormValid || loading || Boolean(error)}
+          >
+            {submitLabel}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

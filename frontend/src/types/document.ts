@@ -4,6 +4,8 @@ export type DocumentType = 'BCN' | 'DCN' | 'DFM';
 
 export interface Document {
   id: number;
+  familyId: number;
+  responsibleEngineerId: number;
   folio: string;
   type: DocumentType;
   program: string;

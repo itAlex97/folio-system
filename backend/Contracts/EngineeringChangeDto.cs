@@ -3,6 +3,8 @@ namespace backend.Contracts;
 public sealed class EngineeringChangeDto
 {
     public int Id { get; init; }
+    public int FamilyId { get; init; }
+    public int ResponsibleEngineerId { get; init; }
     public string Folio { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public string Program { get; init; } = string.Empty;

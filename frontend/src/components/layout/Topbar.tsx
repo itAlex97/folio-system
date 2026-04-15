@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../../auth/useAuth';
 
 export default function Topbar() {
@@ -24,6 +24,7 @@ export default function Topbar() {
         <span className="user-name">{userName}</span>
 
         <button type="button" className="logout-button" onClick={handleLogout}>
+          <LogOut size={16} className="button-icon" />
           Sign Out
         </button>
       </div>
