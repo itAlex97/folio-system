@@ -269,6 +269,66 @@ Resultado: pasa. Puede mostrar warnings `NU1900` si el entorno no puede consulta
 
 No hay pruebas automatizadas detectadas.
 
+## Despliegue en Render
+
+El repositorio ya incluye:
+
+- `render.yaml` (Blueprint con backend + frontend)
+- `backend/Dockerfile` (build y runtime de ASP.NET Core)
+- Backend con CORS configurable por entorno
+- Frontend con `VITE_API_BASE` configurable
+
+### 1) Requisito de base de datos
+
+Render no ofrece SQL Server administrado. Para este proyecto necesitas una instancia SQL Server externa (por ejemplo Azure SQL Database o SQL Server propio con acceso remoto).
+
+1. Crea la base `EngineeringRegistryDB` en tu servidor SQL.
+2. Ejecuta `scripts/folio-system-database.sql`.
+3. Guarda la cadena de conexión en formato SQL Auth (usuario/contraseña), no Integrated Security.
+
+Ejemplo:
+
+```text
+Server=tcp:TU_SERVIDOR.database.windows.net,1433;Initial Catalog=EngineeringRegistryDB;User ID=TU_USUARIO;Password=TU_PASSWORD;Encrypt=True;TrustServerCertificate=False;
+```
+
+### 2) Crear servicios en Render con Blueprint
+
+1. En Render, usa **New +** -> **Blueprint**.
+2. Conecta el repo `itAlex97/folio-system` y selecciona la rama `backend-aspnet`.
+3. Render detectará `render.yaml` y propondrá:
+  - `folio-system-api` (Web Service con Docker)
+  - `folio-system-web` (Static Site)
+
+### 3) Variables de entorno del backend
+
+Configura en `folio-system-api`:
+
+- `ConnectionStrings__EngineeringRegistryDb`: cadena SQL Server de producción.
+- `Jwt__Key`: clave secreta de al menos 32 caracteres.
+- `Cors__AllowedOrigins__0`: URL de tu frontend en Render, por ejemplo `https://folio-system-web.onrender.com`.
+
+Las demás variables de JWT y `ASPNETCORE_ENVIRONMENT` ya vienen en `render.yaml`.
+
+### 4) Variable de entorno del frontend
+
+Configura en `folio-system-web`:
+
+- `VITE_API_BASE`: URL pública del backend + `/api`.
+
+Ejemplo:
+
+```text
+https://folio-system-api.onrender.com/api
+```
+
+### 5) Verificación rápida
+
+1. Abre `https://TU_BACKEND.onrender.com/api/health` y valida respuesta `{ "status": "ok" }`.
+2. Abre el frontend en Render.
+3. Inicia sesión con un usuario existente en la BD.
+4. Confirma que puedes listar documentos sin errores CORS.
+
 ## Deuda y Pendientes
 
 Prioridad alta:
@@ -289,7 +349,7 @@ Prioridad baja:
 
 - Revisar responsive final con datos reales.
 - Considerar tema oscuro.
-- Mover configuración de API base a variables de entorno.
+- ✓ ~~Mover configuración de API base a variables de entorno.~~ **COMPLETADO**: `frontend/src/api/client.ts` usa `VITE_API_BASE` con fallback local.
 
 ## Notas de Limpieza
 

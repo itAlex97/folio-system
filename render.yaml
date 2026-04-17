@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: folio-system-api
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:10000
+      - key: ConnectionStrings__EngineeringRegistryDb
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: folio-system
+      - key: Jwt__Audience
+        value: folio-system-app
+      - key: Jwt__ExpirationMinutes
+        value: "480"
+      - key: Cors__AllowedOrigins__0
+        sync: false
+
+  - type: static_site
+    name: folio-system-web
+    rootDir: frontend
+    buildCommand: npm ci; npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE
+        sync: false

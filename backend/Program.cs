@@ -181,12 +181,39 @@ static async Task<UserEntity?> TryGetAuthenticatedActiveUserAsync(
 
 builder.Services.AddCors(options =>
 {
+    var configuredOrigins = builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>();
+
+    var allowedOrigins = configuredOrigins?
+        .Where(HasValue)
+        .Select(origin => origin.Trim().TrimEnd('/'))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    if (allowedOrigins is null || allowedOrigins.Length == 0)
+    {
+        allowedOrigins = new[]
+        {
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
+        };
+    }
+
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+            if (allowedOrigins.Contains("*", StringComparer.Ordinal))
+            {
+                policy.AllowAnyOrigin();
+            }
+            else
+            {
+                policy.WithOrigins(allowedOrigins);
+            }
+
+            policy.AllowAnyHeader()
+                .AllowAnyMethod();
         });
 });
 
