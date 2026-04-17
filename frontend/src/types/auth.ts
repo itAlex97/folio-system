@@ -9,4 +9,5 @@ export interface AuthUser {
 
 export interface LoginResponse {
   user: AuthUser;
+  token: string;
 }

@@ -5,6 +5,7 @@ import { login as loginRequest } from '../services/authService';
 import type { AuthUser } from '../types/auth';
 
 const AUTH_STORAGE_KEY = 'folio.auth.user';
+const TOKEN_STORAGE_KEY = 'folio.auth.token';
 
 function readStoredUser(): AuthUser | null {
   const value = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -16,6 +17,7 @@ function readStoredUser(): AuthUser | null {
     return JSON.parse(value) as AuthUser;
   } catch {
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
     return null;
   }
 }
@@ -32,11 +34,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setUser(response.user);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(response.user));
+    localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
   }, []);
 
   const value = useMemo<AuthContextValue>(

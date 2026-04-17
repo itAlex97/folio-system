@@ -29,8 +29,8 @@
   --success-soft: #dcfce7;
   --warning: #d97706;
   --warning-soft: #fef3c7;
-  --disabled: #d1d5db;
-  --disabled-bg: #f3f4f6;
+  --disabled: #6b7280;
+  --disabled-bg: #e5e7eb;
 
   /* Espaciado y Transiciones */
   --radius-sm: 6px;
@@ -403,10 +403,11 @@ textarea {
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 1;
   cursor: not-allowed;
   background-color: var(--disabled-bg);
   color: var(--disabled);
+  border-color: var(--disabled) !important;
 }
 
 .table-panel {

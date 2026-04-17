@@ -1,23 +1,9 @@
 export const API_BASE = 'http://127.0.0.1:5052/api';
 
-const AUTH_STORAGE_KEY = 'folio.auth.user';
+const TOKEN_STORAGE_KEY = 'folio.auth.token';
 
-function getAuthenticatedUserId(): string | null {
-  const value = localStorage.getItem(AUTH_STORAGE_KEY);
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const user = JSON.parse(value) as { id?: number };
-    if (!user.id || user.id <= 0) {
-      return null;
-    }
-
-    return String(user.id);
-  } catch {
-    return null;
-  }
+function getAuthToken(): string | null {
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 export function buildApiHeaders(includeJsonContentType: boolean): HeadersInit {
@@ -27,9 +13,9 @@ export function buildApiHeaders(includeJsonContentType: boolean): HeadersInit {
     headers['Content-Type'] = 'application/json';
   }
 
-  const authenticatedUserId = getAuthenticatedUserId();
-  if (authenticatedUserId) {
-    headers['X-Auth-User-Id'] = authenticatedUserId;
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   return headers;

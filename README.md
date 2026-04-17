@@ -6,7 +6,8 @@ Sistema interno para registrar, consultar y administrar folios de cambios de ing
 
 El sistema esta en estado MVP funcional para demo o uso interno controlado:
 
-- Login con usuarios activos.
+- ✓ Login con usuarios activos.
+- ✓ Autenticación JWT con Bearer tokens (expiración 8 horas).
 - Roles: `ADMIN`, `LEADER`, `ENGINEER`, `DRAFTER`.
 - Listado, busqueda, filtros y ordenamiento de documentos.
 - Creacion de documentos `BCN`, `DCN` y `DFM`.
@@ -16,7 +17,7 @@ El sistema esta en estado MVP funcional para demo o uso interno controlado:
 - Pantallas admin basicas para usuarios, catalogos y reportes.
 - UI redisenada con paleta neutral, acento rojo corporativo e iconografia `lucide-react`.
 
-No esta listo como produccion abierta todavia. Las principales deudas son autenticacion real, auditoria persistente, mejores formularios admin, pruebas automatizadas y limpieza del flujo de prompts.
+No esta listo como produccion abierta todavia. Las principales deudas restantes son quitar fallback de password plano, auditoría persistente, mejores formularios admin, pruebas automatizadas y limpieza del flujo de prompts.
 
 ## Stack
 
@@ -75,12 +76,16 @@ Valor actual:
 Data Source=.\SQLEXPRESS;Initial Catalog=EngineeringRegistryDB;Integrated Security=True;TrustServerCertificate=True
 ```
 
-Scripts disponibles:
+Script disponible:
 
-- `scripts/update-users-auth-schema.sql`: recrea `Users` con username/password.
-- `scripts/recreate-engineering-changes-with-audit.sql`: recrea tablas de documentos y detalles. Borra datos de esas tablas.
-- `scripts/add-created-by-user-audit.sql`: agrega `CreatedByUserId` a documentos existentes.
-- `scripts/seed-initial-data.sql`: carga programas, tipos, familias, usuarios y secuencias iniciales.
+- `scripts/folio-system-database.sql`: archivo unico consolidado con tablas, columnas, indices, constraints, procedimiento de folios, vista de perfiles y seed inicial. No borra informacion; crea lo que no exista y agrega columnas faltantes.
+
+El script ya incluye datos de empleado en `Users` y campos para soportar contrasena predeterminada con cambio posterior:
+
+- `Username`, `PasswordHash`, `FirstName`, `LastNamePaternal`, `LastNameMaternal`, `Department`, `JobTitle`, `Location`.
+- `MustChangePassword`, `PasswordChangedAt`, `LastLoginAt`.
+- Tabla `UserPasswordChangeLog`.
+- Vista `v_UserProfiles` para una futura pagina de perfil de solo lectura.
 
 El backend espera que exista el stored procedure `GenerateEngineeringFolio`, usado al crear documentos.
 
@@ -138,6 +143,41 @@ npm run build
 npm run lint
 npm run preview
 ```
+
+## Autenticación JWT
+
+El sistema utiliza JWT (JSON Web Tokens) para autenticación:
+
+### Backend
+
+- **Generación**: El endpoint `POST /api/auth/login` genera un JWT con claims:
+  - `sub` (user id)
+  - `name`
+  - `given_name` (username)
+  - `role`
+  - `ProgramId`
+- **Validación**: Middleware `JwtAuthenticationMiddleware` valida el token en todas las requests
+- **Expiración**: 480 minutos (8 horas)
+- **Header**: `Authorization: Bearer <token>`
+
+### Frontend
+
+- **Almacenamiento**: Token guardado en `localStorage` bajo la clave `folio.auth.token`
+- **Envío**: Todos los requests incluyen el header `Authorization: Bearer <token>` automáticamente
+- **Manejo de expiración**: Si un endpoint retorna 401, se limpia el storage y se redirige a `/login`
+
+### Configuración (appsettings.json)
+
+```json
+"Jwt": {
+  "Key": "your-super-secret-key-change-this-in-production...",
+  "Issuer": "folio-system",
+  "Audience": "folio-system-app",
+  "ExpirationMinutes": 480
+}
+```
+
+⚠️ **IMPORTANTE**: Cambiar `Jwt.Key` en producción a una clave segura de al menos 32 caracteres.
 
 ## Roles y Permisos
 
@@ -233,23 +273,23 @@ No hay pruebas automatizadas detectadas.
 
 Prioridad alta:
 
-- Reemplazar autenticacion por header `X-Auth-User-Id` con JWT/sesion real.
+- ✓ ~~Reemplazar autenticación por header `X-Auth-User-Id` con JWT/sesión real.~~ **COMPLETADO**: Implementada autenticación JWT. El login genera tokens JWT con expiración de 8 horas. Los endpoints protegidos requieren header Authorization Bearer.
 - Quitar fallback de password plano y usar hashing obligatorio.
-- Guardar historial/auditoria de acciones con usuario, accion, razon y fecha.
+- Guardar historial/auditoría de acciones con usuario, acción, razón y fecha.
 
 Prioridad media:
 
 - Reemplazar `window.prompt` y `window.confirm` por modales/formularios.
 - Mejorar Admin Users: crear usuario, reset password, editar en formulario.
 - Mejorar Admin Catalogs: editar/desactivar/catalogar familias y tipos.
-- Hacer reportes mas utiles: filtros, exportacion y actividad historica.
+- Hacer reportes más útiles: filtros, exportación y actividad histórica.
 - Agregar pruebas de backend y frontend.
 
 Prioridad baja:
 
 - Revisar responsive final con datos reales.
 - Considerar tema oscuro.
-- Mover configuracion de API base a variables de entorno.
+- Mover configuración de API base a variables de entorno.
 
 ## Notas de Limpieza
 

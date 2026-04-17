@@ -1,6 +1,8 @@
 using backend.Contracts;
 using backend.Data;
+using backend.Middleware;
 using backend.Models;
+using backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -188,6 +190,8 @@ builder.Services.AddCors(options =>
         });
 });
 
+builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+
 builder.Services.AddDbContext<EngineeringRegistryDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("EngineeringRegistryDb")));
 
@@ -199,6 +203,9 @@ var app = builder.Build();
 
 app.UseCors("AllowFrontend");
 
+// Add JWT authentication middleware
+app.UseMiddleware<JwtAuthenticationMiddleware>();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -209,7 +216,8 @@ app.MapGet("/api/health", () => new { status = "ok" });
 
 app.MapPost("/api/auth/login", async (
     LoginRequestDto request,
-    EngineeringRegistryDbContext dbContext) =>
+    EngineeringRegistryDbContext dbContext,
+    IJwtTokenGenerator tokenGenerator) =>
 {
     var normalizedUsername = request.Username?.Trim();
     var password = request.Password?.Trim();
@@ -231,9 +239,12 @@ app.MapPost("/api/auth/login", async (
         return Results.Unauthorized();
     }
 
+    var token = tokenGenerator.GenerateToken(user);
+
     return Results.Ok(new LoginResponseDto
     {
-        User = MapAuthenticatedUser(user)
+        User = MapAuthenticatedUser(user),
+        Token = token
     });
 });
 

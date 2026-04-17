@@ -10,7 +10,7 @@ export async function login(request: LoginRequest): Promise<LoginResponse> {
   try {
     return await apiPost<LoginResponse, LoginRequest>('/auth/login', request);
   } catch (error) {
-    if (error instanceof Error && error.message.includes('status 401')) {
+    if (error instanceof Error && error.message.includes('401')) {
       throw new Error('Invalid user or password.');
     }
 
