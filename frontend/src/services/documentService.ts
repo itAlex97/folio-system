@@ -16,12 +16,14 @@ interface EngineeringChangeApiResponse {
   status: string;
   created: string;
   closedAt?: string | null;
+  carLeaderId?: number | null;
   carLeader?: string | null;
   changeDescription?: string | null;
   associatedDocument?: string | null;
   composite?: string | null;
   issue?: string | null;
-  target?: string | null;
+  dreId?: number | null;
+  dreName?: string | null;
 }
 
 interface CreateEngineeringChangeRequest {
@@ -31,12 +33,12 @@ interface CreateEngineeringChangeRequest {
   responsibleEngineerId: number;
   modelYear: string;
   phase: string;
-  carLeader?: string;
+  carLeaderId?: number;
   changeDescription?: string;
   associatedDocument?: string;
   composite?: string;
   issue?: string;
-  target?: string;
+  dreId?: number;
 }
 
 interface UpdateEngineeringChangeRequest {
@@ -45,12 +47,12 @@ interface UpdateEngineeringChangeRequest {
   reassignmentReason?: string;
   modelYear: string;
   phase: string;
-  carLeader?: string;
+  carLeaderId?: number;
   changeDescription?: string;
   associatedDocument?: string;
   composite?: string;
   issue?: string;
-  target?: string;
+  dreId?: number;
 }
 
 interface DocumentQuery {
@@ -78,12 +80,14 @@ function mapDocument(apiDocument: EngineeringChangeApiResponse): Document {
     status: apiDocument.status as DocumentStatus,
     created: apiDocument.created,
     closedAt: apiDocument.closedAt ?? null,
+    carLeaderId: apiDocument.carLeaderId ?? null,
     carLeader: apiDocument.carLeader ?? null,
     changeDescription: apiDocument.changeDescription ?? null,
     associatedDocument: apiDocument.associatedDocument ?? null,
     composite: apiDocument.composite ?? null,
     issue: apiDocument.issue ?? null,
-    target: apiDocument.target ?? null,
+    dreId: apiDocument.dreId ?? null,
+    dreName: apiDocument.dreName ?? null,
   };
 }
 

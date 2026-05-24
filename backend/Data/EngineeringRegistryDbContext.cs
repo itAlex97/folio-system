@@ -8,6 +8,8 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
 {
     public DbSet<ProgramEntity> Programs => Set<ProgramEntity>();
     public DbSet<FamilyEntity> Families => Set<FamilyEntity>();
+    public DbSet<CarLeaderEntity> CarLeaders => Set<CarLeaderEntity>();
+    public DbSet<DreEntity> Dres => Set<DreEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<DocumentTypeEntity> DocumentTypes => Set<DocumentTypeEntity>();
     public DbSet<SequenceControlEntity> SequenceControls => Set<SequenceControlEntity>();
@@ -31,21 +33,47 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
         {
             entity.ToTable("Families");
             entity.HasKey(family => family.Id);
-            entity.Property(family => family.Name).HasMaxLength(50).IsRequired();
+            entity.Property(family => family.Name).HasMaxLength(100).IsRequired();
 
             entity.HasOne(family => family.Program)
                 .WithMany(program => program.Families)
                 .HasForeignKey(family => family.ProgramId);
         });
 
+        modelBuilder.Entity<CarLeaderEntity>(entity =>
+        {
+            entity.ToTable("CarLeaders");
+            entity.HasKey(carLeader => carLeader.Id);
+            entity.Property(carLeader => carLeader.Name).HasMaxLength(100).IsRequired();
+
+            entity.HasOne(carLeader => carLeader.Program)
+                .WithMany(program => program.CarLeaders)
+                .HasForeignKey(carLeader => carLeader.ProgramId);
+        });
+
+        modelBuilder.Entity<DreEntity>(entity =>
+        {
+            entity.ToTable("DREs");
+            entity.HasKey(dre => dre.Id);
+            entity.Property(dre => dre.Name).HasMaxLength(100).IsRequired();
+
+            entity.HasOne(dre => dre.Program)
+                .WithMany(program => program.Dres)
+                .HasForeignKey(dre => dre.ProgramId);
+        });
+
         modelBuilder.Entity<UserEntity>(entity =>
         {
             entity.ToTable("Users");
             entity.HasKey(user => user.Id);
-            entity.Property(user => user.Name).HasMaxLength(100).IsRequired();
+            entity.Ignore(user => user.DisplayName);
+            entity.Property(user => user.FirstName).HasMaxLength(50).IsRequired();
+            entity.Property(user => user.LastName).HasMaxLength(50).IsRequired();
             entity.Property(user => user.Username).HasMaxLength(50).IsRequired();
             entity.Property(user => user.PasswordHash).HasMaxLength(255).IsRequired();
             entity.Property(user => user.Role).HasMaxLength(20).IsRequired();
+            entity.Property(user => user.JobTitle).HasMaxLength(100);
+            entity.Property(user => user.Location).HasMaxLength(100);
             entity.Property(user => user.IsActive).HasDefaultValue(true);
             entity.HasIndex(user => user.Username).IsUnique();
 
@@ -126,6 +154,11 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.HasOne(detail => detail.EngineeringChange)
                 .WithOne(change => change.BcnDetail)
                 .HasForeignKey<EngineeringChangeBcnDetailEntity>(detail => detail.EngineeringChangeId);
+
+            entity.HasOne(detail => detail.CarLeader)
+                .WithMany(carLeader => carLeader.EngineeringChangeBcnDetails)
+                .HasForeignKey(detail => detail.CarLeaderId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<EngineeringChangeDcnDetailEntity>(entity =>
@@ -136,6 +169,11 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.HasOne(detail => detail.EngineeringChange)
                 .WithOne(change => change.DcnDetail)
                 .HasForeignKey<EngineeringChangeDcnDetailEntity>(detail => detail.EngineeringChangeId);
+
+            entity.HasOne(detail => detail.CarLeader)
+                .WithMany(carLeader => carLeader.EngineeringChangeDcnDetails)
+                .HasForeignKey(detail => detail.CarLeaderId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<EngineeringChangeDfmDetailEntity>(entity =>
@@ -146,6 +184,11 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.HasOne(detail => detail.EngineeringChange)
                 .WithOne(change => change.DfmDetail)
                 .HasForeignKey<EngineeringChangeDfmDetailEntity>(detail => detail.EngineeringChangeId);
+
+            entity.HasOne(detail => detail.Dre)
+                .WithMany(dre => dre.EngineeringChangeDfmDetails)
+                .HasForeignKey(detail => detail.DreId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

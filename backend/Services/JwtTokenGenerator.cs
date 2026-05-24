@@ -38,7 +38,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Name),
+            new Claim(ClaimTypes.Name, user.DisplayName),
             new Claim(ClaimTypes.GivenName, user.Username),
             new Claim("Role", user.Role),
             new Claim("ProgramId", user.ProgramId.ToString())

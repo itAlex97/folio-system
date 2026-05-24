@@ -20,7 +20,7 @@ services:
       - key: Jwt__Audience
         value: folio-system-app
       - key: Jwt__ExpirationMinutes
-        value: "480"
+        value: '480'
       - key: Cors__AllowedOrigins__0
         sync: false
 

@@ -1,8 +1,9 @@
 const envApiBase = import.meta.env.VITE_API_BASE?.trim();
 
-export const API_BASE = envApiBase && envApiBase.length > 0
-  ? envApiBase.replace(/\/+$/, '')
-  : 'http://127.0.0.1:5052/api';
+export const API_BASE =
+  envApiBase && envApiBase.length > 0
+    ? envApiBase.replace(/\/+$/, '')
+    : 'http://127.0.0.1:5052/api';
 
 const TOKEN_STORAGE_KEY = 'folio.auth.token';
 

@@ -17,10 +17,12 @@ export interface Document {
   status: DocumentStatus;
   created: string;
   closedAt?: string | null;
+  carLeaderId?: number | null;
   carLeader?: string | null;
   changeDescription?: string | null;
   associatedDocument?: string | null;
   composite?: string | null;
   issue?: string | null;
-  target?: string | null;
+  dreId?: number | null;
+  dreName?: string | null;
 }

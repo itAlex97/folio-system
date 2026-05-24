@@ -343,12 +343,12 @@ export default function DocumentDetailPage() {
             responsibleEngineerId: effectiveDocument.responsibleEngineerId,
             modelYear: effectiveDocument.modelYear ?? '',
             phase: effectiveDocument.phase ?? '',
-            carLeader: effectiveDocument.carLeader ?? '',
+            carLeaderId: effectiveDocument.carLeaderId ?? undefined,
             changeDescription: effectiveDocument.changeDescription ?? '',
             associatedDocument: effectiveDocument.associatedDocument ?? '',
             composite: effectiveDocument.composite ?? '',
             issue: effectiveDocument.issue ?? '',
-            target: effectiveDocument.target ?? '',
+            dreId: effectiveDocument.dreId ?? undefined,
           }}
           options={formOptions}
           loading={formOptionsLoading || isSubmitting}
@@ -375,12 +375,12 @@ export default function DocumentDetailPage() {
                   reassignmentReason: values.reassignmentReason,
                   modelYear: values.modelYear,
                   phase: values.phase,
-                  carLeader: values.carLeader,
+                  carLeaderId: values.carLeaderId,
                   changeDescription: values.changeDescription,
                   associatedDocument: values.associatedDocument,
                   composite: values.composite,
                   issue: values.issue,
-                  target: values.target,
+                  dreId: values.dreId,
                 },
               );
 

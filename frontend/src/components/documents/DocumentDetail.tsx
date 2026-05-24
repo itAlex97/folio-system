@@ -88,10 +88,10 @@ export default function DocumentDetail({ document }: Props) {
         </div>
       )}
 
-      {document.target && (
+      {document.dreName && (
         <div className="document-field">
-          <span className="field-label">Target</span>
-          <span className="field-value">{document.target}</span>
+          <span className="field-label">DRE</span>
+          <span className="field-value">{document.dreName}</span>
         </div>
       )}
     </div>

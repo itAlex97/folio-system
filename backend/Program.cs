@@ -22,20 +22,53 @@ static EngineeringChangeDto MapEngineeringChange(EngineeringChangeEntity change)
         Type = change.DocumentType.Code,
         Program = change.Program.Code,
         Family = change.Family.Name,
-        Responsible = change.ResponsibleEngineer.Name,
-        CreatedBy = change.CreatedByUser.Name,
+        Responsible = change.ResponsibleEngineer.DisplayName,
+        CreatedBy = change.CreatedByUser.DisplayName,
         ModelYear = change.ModelYear,
         Phase = change.Phase,
         Status = change.Status,
         Created = change.CreatedAt.ToString("yyyy-MM-dd"),
         ClosedAt = change.ClosedAt?.ToString("yyyy-MM-dd"),
-        CarLeader = change.BcnDetail?.CarLeader ?? change.DcnDetail?.CarLeader,
+        CarLeaderId = change.BcnDetail?.CarLeaderId ?? change.DcnDetail?.CarLeaderId,
+        CarLeader = change.BcnDetail?.CarLeader?.Name ?? change.DcnDetail?.CarLeader?.Name,
         ChangeDescription = change.BcnDetail?.ChangeDescription ?? change.DcnDetail?.ChangeDescription,
         AssociatedDocument = change.DcnDetail?.AssociatedDocument,
         Composite = change.DfmDetail?.Composite,
         Issue = change.DfmDetail?.Issue,
-        Target = change.DfmDetail?.Target
+        DreId = change.DfmDetail?.DreId,
+        DreName = change.DfmDetail?.Dre?.Name
     };
+}
+
+static (string FirstName, string LastName) SplitDisplayName(string displayName)
+{
+    var parts = displayName
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    if (parts.Length == 0)
+    {
+        return (string.Empty, string.Empty);
+    }
+
+    if (parts.Length == 1)
+    {
+        return (parts[0], string.Empty);
+    }
+
+    return (string.Join(' ', parts[..^1]), parts[^1]);
+}
+
+static async Task<CarLeaderEntity?> TryGetProgramCarLeaderAsync(
+    EngineeringRegistryDbContext dbContext,
+    int programId)
+{
+    var carLeaders = await dbContext.CarLeaders
+        .Where(item => item.ProgramId == programId)
+        .OrderBy(item => item.Id)
+        .Take(2)
+        .ToListAsync();
+
+    return carLeaders.Count == 1 ? carLeaders[0] : null;
 }
 
 static IQueryable<EngineeringChangeEntity> BuildEngineeringChangeQuery(EngineeringRegistryDbContext dbContext)
@@ -48,8 +81,11 @@ static IQueryable<EngineeringChangeEntity> BuildEngineeringChangeQuery(Engineeri
         .Include(change => change.ResponsibleEngineer)
         .Include(change => change.CreatedByUser)
         .Include(change => change.BcnDetail)
+        .ThenInclude(detail => detail!.CarLeader)
         .Include(change => change.DcnDetail)
-        .Include(change => change.DfmDetail);
+        .ThenInclude(detail => detail!.CarLeader)
+        .Include(change => change.DfmDetail)
+        .ThenInclude(detail => detail!.Dre);
 }
 
 static bool HasValue(string? value)
@@ -74,7 +110,7 @@ static AuthenticatedUserDto MapAuthenticatedUser(UserEntity user)
     return new AuthenticatedUserDto
     {
         Id = user.Id,
-        Name = user.Name,
+        Name = user.DisplayName,
         Username = user.Username,
         Role = user.Role,
         ProgramCode = user.Program.Code,
@@ -134,7 +170,19 @@ static bool VerifyPassword(string plainPassword, string storedPassword)
 
     var parts = storedPassword.Split('$');
 
-    // Backward compatibility: if the value is not a PBKDF2 hash, compare as plain text.
+    if (storedPassword.Length == 64 &&
+        storedPassword.All(Uri.IsHexDigit))
+    {
+        var passwordBytes = System.Text.Encoding.UTF8.GetBytes(plainPassword);
+        var actualBytes = SHA256.HashData(passwordBytes);
+        var actualHash = Convert.ToHexString(actualBytes);
+
+        return CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.ASCII.GetBytes(actualHash),
+            System.Text.Encoding.ASCII.GetBytes(storedPassword.ToUpperInvariant()));
+    }
+
+    // Backward compatibility: if the value is not a PBKDF2 or SHA256 hash, compare as plain text.
     if (parts.Length != 4 || !string.Equals(parts[0], "PBKDF2", StringComparison.Ordinal))
     {
         return string.Equals(plainPassword, storedPassword, StringComparison.Ordinal);
@@ -417,6 +465,48 @@ app.MapGet("/api/document-form-options", async (HttpContext httpContext, Enginee
         })
         .ToListAsync();
 
+    IQueryable<CarLeaderEntity> carLeadersQuery = dbContext.CarLeaders
+        .AsNoTracking()
+        .Include(carLeader => carLeader.Program);
+
+    if (IsProgramScopedUser(authenticatedUser))
+    {
+        carLeadersQuery = carLeadersQuery.Where(carLeader => carLeader.ProgramId == authenticatedUser.ProgramId);
+    }
+
+    var carLeaders = await carLeadersQuery
+        .AsNoTracking()
+        .OrderBy(carLeader => carLeader.Program.Code)
+        .ThenBy(carLeader => carLeader.Name)
+        .Select(carLeader => new CarLeaderOptionDto
+        {
+            Id = carLeader.Id,
+            Name = carLeader.Name,
+            ProgramCode = carLeader.Program.Code
+        })
+        .ToListAsync();
+
+    IQueryable<DreEntity> dresQuery = dbContext.Dres
+        .AsNoTracking()
+        .Include(dre => dre.Program);
+
+    if (IsProgramScopedUser(authenticatedUser))
+    {
+        dresQuery = dresQuery.Where(dre => dre.ProgramId == authenticatedUser.ProgramId);
+    }
+
+    var dres = await dresQuery
+        .AsNoTracking()
+        .OrderBy(dre => dre.Program.Code)
+        .ThenBy(dre => dre.Name)
+        .Select(dre => new DreOptionDto
+        {
+            Id = dre.Id,
+            Name = dre.Name,
+            ProgramCode = dre.Program.Code
+        })
+        .ToListAsync();
+
     IQueryable<UserEntity> responsibleEngineersQuery = dbContext.Users
         .AsNoTracking()
         .Include(user => user.Program)
@@ -430,11 +520,12 @@ app.MapGet("/api/document-form-options", async (HttpContext httpContext, Enginee
     var responsibleEngineers = await responsibleEngineersQuery
         .AsNoTracking()
         .OrderBy(user => user.Program.Code)
-        .ThenBy(user => user.Name)
+        .ThenBy(user => user.FirstName)
+        .ThenBy(user => user.LastName)
         .Select(user => new ResponsibleEngineerOptionDto
         {
             Id = user.Id,
-            Name = user.Name,
+            Name = (user.FirstName + " " + user.LastName).Trim(),
             ProgramCode = user.Program.Code
         })
         .ToListAsync();
@@ -444,6 +535,8 @@ app.MapGet("/api/document-form-options", async (HttpContext httpContext, Enginee
         DocumentTypes = documentTypes,
         Programs = programs,
         Families = families,
+        CarLeaders = carLeaders,
+        Dres = dres,
         ResponsibleEngineers = responsibleEngineers
     });
 });
@@ -508,12 +601,12 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
     var normalizedModelYear = request.ModelYear?.Trim();
     var normalizedPhase = request.Phase?.Trim();
     var normalizedReassignmentReason = request.ReassignmentReason?.Trim();
-    var normalizedCarLeader = request.CarLeader?.Trim();
+    var hasCarLeaderInput = request.CarLeaderId.HasValue;
     var normalizedChangeDescription = request.ChangeDescription?.Trim();
     var normalizedAssociatedDocument = request.AssociatedDocument?.Trim();
     var normalizedComposite = request.Composite?.Trim();
     var normalizedIssue = request.Issue?.Trim();
-    var normalizedTarget = request.Target?.Trim();
+    var dreId = request.DreId;
 
     if (request.FamilyId <= 0)
     {
@@ -544,11 +637,6 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
     switch (document.DocumentType.Code)
     {
         case "BCN":
-            if (!HasValue(normalizedCarLeader))
-            {
-                return Results.BadRequest(new { message = "Car leader is required for BCN." });
-            }
-
             if (!HasValue(normalizedChangeDescription))
             {
                 return Results.BadRequest(new { message = "Change description is required for BCN." });
@@ -557,18 +645,13 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
             if (HasValue(normalizedAssociatedDocument) ||
                 HasValue(normalizedComposite) ||
                 HasValue(normalizedIssue) ||
-                HasValue(normalizedTarget))
+                dreId.HasValue)
             {
                 return Results.BadRequest(new { message = "BCN contains fields that belong to another document type." });
             }
             break;
 
         case "DCN":
-            if (!HasValue(normalizedCarLeader))
-            {
-                return Results.BadRequest(new { message = "Car leader is required for DCN." });
-            }
-
             if (!HasValue(normalizedChangeDescription))
             {
                 return Results.BadRequest(new { message = "Change description is required for DCN." });
@@ -576,7 +659,7 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
 
             if (HasValue(normalizedComposite) ||
                 HasValue(normalizedIssue) ||
-                HasValue(normalizedTarget))
+                dreId.HasValue)
             {
                 return Results.BadRequest(new { message = "DCN contains fields that belong to another document type." });
             }
@@ -593,12 +676,12 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
                 return Results.BadRequest(new { message = "Issue is required for DFM." });
             }
 
-            if (!HasValue(normalizedTarget))
+            if (!dreId.HasValue || dreId.Value <= 0)
             {
-                return Results.BadRequest(new { message = "Target is required for DFM." });
+                return Results.BadRequest(new { message = "DRE is required for DFM." });
             }
 
-            if (HasValue(normalizedCarLeader) ||
+            if (hasCarLeaderInput ||
                 HasValue(normalizedChangeDescription) ||
                 HasValue(normalizedAssociatedDocument))
             {
@@ -629,6 +712,29 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
         return Results.BadRequest(new { message = "Selected responsible engineer does not belong to the document program." });
     }
 
+    CarLeaderEntity? carLeader = null;
+    if (document.DocumentType.Code is "BCN" or "DCN")
+    {
+        carLeader = await TryGetProgramCarLeaderAsync(dbContext, document.ProgramId);
+
+        if (carLeader is null)
+        {
+            return Results.BadRequest(new { message = "The document program must have exactly one assigned car leader." });
+        }
+    }
+
+    DreEntity? dre = null;
+    if (document.DocumentType.Code == "DFM")
+    {
+        dre = await dbContext.Dres
+            .SingleOrDefaultAsync(item => item.Id == dreId);
+
+        if (dre is null || dre.ProgramId != document.ProgramId)
+        {
+            return Results.BadRequest(new { message = "Selected DRE does not belong to the document program." });
+        }
+    }
+
     document.FamilyId = family.Id;
     document.ResponsibleEngineerId = responsibleEngineer.Id;
     document.ModelYear = normalizedModelYear;
@@ -641,7 +747,7 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
             {
                 EngineeringChangeId = document.Id
             };
-            document.BcnDetail.CarLeader = normalizedCarLeader;
+            document.BcnDetail.CarLeaderId = carLeader!.Id;
             document.BcnDetail.ChangeDescription = normalizedChangeDescription;
             break;
         case "DCN":
@@ -649,7 +755,7 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
             {
                 EngineeringChangeId = document.Id
             };
-            document.DcnDetail.CarLeader = normalizedCarLeader;
+            document.DcnDetail.CarLeaderId = carLeader!.Id;
             document.DcnDetail.AssociatedDocument = normalizedAssociatedDocument;
             document.DcnDetail.ChangeDescription = normalizedChangeDescription;
             break;
@@ -660,7 +766,7 @@ app.MapPatch("/api/engineering-changes/{id:int}", async (
             };
             document.DfmDetail.Composite = normalizedComposite;
             document.DfmDetail.Issue = normalizedIssue;
-            document.DfmDetail.Target = normalizedTarget;
+            document.DfmDetail.DreId = dre!.Id;
             break;
     }
 
@@ -774,12 +880,12 @@ app.MapPost("/api/engineering-changes", async (
     var normalizedProgramCode = request.ProgramCode?.Trim() ?? string.Empty;
     var normalizedModelYear = request.ModelYear?.Trim();
     var normalizedPhase = request.Phase?.Trim();
-    var normalizedCarLeader = request.CarLeader?.Trim();
+    var hasCarLeaderInput = request.CarLeaderId.HasValue;
     var normalizedChangeDescription = request.ChangeDescription?.Trim();
     var normalizedAssociatedDocument = request.AssociatedDocument?.Trim();
     var normalizedComposite = request.Composite?.Trim();
     var normalizedIssue = request.Issue?.Trim();
-    var normalizedTarget = request.Target?.Trim();
+    var dreId = request.DreId;
 
     if (string.IsNullOrWhiteSpace(normalizedType))
     {
@@ -819,11 +925,6 @@ app.MapPost("/api/engineering-changes", async (
     switch (normalizedType)
     {
         case "BCN":
-            if (!HasValue(normalizedCarLeader))
-            {
-                return Results.BadRequest(new { message = "Car leader is required for BCN." });
-            }
-
             if (!HasValue(normalizedChangeDescription))
             {
                 return Results.BadRequest(new { message = "Change description is required for BCN." });
@@ -832,18 +933,13 @@ app.MapPost("/api/engineering-changes", async (
             if (HasValue(normalizedAssociatedDocument) ||
                 HasValue(normalizedComposite) ||
                 HasValue(normalizedIssue) ||
-                HasValue(normalizedTarget))
+                dreId.HasValue)
             {
                 return Results.BadRequest(new { message = "BCN contains fields that belong to another document type." });
             }
             break;
 
         case "DCN":
-            if (!HasValue(normalizedCarLeader))
-            {
-                return Results.BadRequest(new { message = "Car leader is required for DCN." });
-            }
-
             if (!HasValue(normalizedChangeDescription))
             {
                 return Results.BadRequest(new { message = "Change description is required for DCN." });
@@ -851,7 +947,7 @@ app.MapPost("/api/engineering-changes", async (
 
             if (HasValue(normalizedComposite) ||
                 HasValue(normalizedIssue) ||
-                HasValue(normalizedTarget))
+                dreId.HasValue)
             {
                 return Results.BadRequest(new { message = "DCN contains fields that belong to another document type." });
             }
@@ -868,12 +964,12 @@ app.MapPost("/api/engineering-changes", async (
                 return Results.BadRequest(new { message = "Issue is required for DFM." });
             }
 
-            if (!HasValue(normalizedTarget))
+            if (!dreId.HasValue || dreId.Value <= 0)
             {
-                return Results.BadRequest(new { message = "Target is required for DFM." });
+                return Results.BadRequest(new { message = "DRE is required for DFM." });
             }
 
-            if (HasValue(normalizedCarLeader) ||
+            if (hasCarLeaderInput ||
                 HasValue(normalizedChangeDescription) ||
                 HasValue(normalizedAssociatedDocument))
             {
@@ -920,6 +1016,29 @@ app.MapPost("/api/engineering-changes", async (
     if (responsibleEngineer is null || responsibleEngineer.ProgramId != program.Id)
     {
         return Results.BadRequest(new { message = "Selected responsible engineer does not belong to the chosen program." });
+    }
+
+    CarLeaderEntity? carLeader = null;
+    if (normalizedType is "BCN" or "DCN")
+    {
+        carLeader = await TryGetProgramCarLeaderAsync(dbContext, program.Id);
+
+        if (carLeader is null)
+        {
+            return Results.BadRequest(new { message = "The selected program must have exactly one assigned car leader." });
+        }
+    }
+
+    DreEntity? dre = null;
+    if (normalizedType == "DFM")
+    {
+        dre = await dbContext.Dres
+            .SingleOrDefaultAsync(item => item.Id == dreId);
+
+        if (dre is null || dre.ProgramId != program.Id)
+        {
+            return Results.BadRequest(new { message = "Selected DRE does not belong to the chosen program." });
+        }
     }
 
     var createdByUser = await dbContext.Users
@@ -983,7 +1102,7 @@ app.MapPost("/api/engineering-changes", async (
             dbContext.EngineeringChangeBcnDetails.Add(new EngineeringChangeBcnDetailEntity
             {
                 EngineeringChange = engineeringChange,
-                CarLeader = normalizedCarLeader,
+                CarLeaderId = carLeader!.Id,
                 ChangeDescription = normalizedChangeDescription
             });
             break;
@@ -991,7 +1110,7 @@ app.MapPost("/api/engineering-changes", async (
             dbContext.EngineeringChangeDcnDetails.Add(new EngineeringChangeDcnDetailEntity
             {
                 EngineeringChange = engineeringChange,
-                CarLeader = normalizedCarLeader,
+                CarLeaderId = carLeader!.Id,
                 AssociatedDocument = normalizedAssociatedDocument,
                 ChangeDescription = normalizedChangeDescription
             });
@@ -1002,7 +1121,7 @@ app.MapPost("/api/engineering-changes", async (
                 EngineeringChange = engineeringChange,
                 Composite = normalizedComposite,
                 Issue = normalizedIssue,
-                Target = normalizedTarget
+                DreId = dre!.Id
             });
             break;
         default:
@@ -1192,11 +1311,12 @@ app.MapGet("/api/admin/users", async (
     var users = await dbContext.Users
         .AsNoTracking()
         .Include(user => user.Program)
-        .OrderBy(user => user.Name)
+        .OrderBy(user => user.FirstName)
+        .ThenBy(user => user.LastName)
         .Select(user => new
         {
             user.Id,
-            user.Name,
+            Name = (user.FirstName + " " + user.LastName).Trim(),
             user.Username,
             user.Role,
             user.IsActive,
@@ -1250,7 +1370,10 @@ app.MapPatch("/api/admin/users/{id:int}", async (
         return Results.BadRequest(new { message = "Program was not found." });
     }
 
-    user.Name = normalizedName;
+    var (firstName, lastName) = SplitDisplayName(normalizedName);
+
+    user.FirstName = firstName;
+    user.LastName = lastName;
     user.Role = normalizedRole;
     user.ProgramId = program.Id;
     user.IsActive = request.IsActive;

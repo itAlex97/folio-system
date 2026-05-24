@@ -24,12 +24,12 @@ interface Props {
     responsibleEngineerId?: number;
     modelYear?: string;
     phase?: string;
-    carLeader?: string;
+    carLeaderId?: number;
     changeDescription?: string;
     associatedDocument?: string;
     composite?: string;
     issue?: string;
-    target?: string;
+    dreId?: number;
     reassignmentReason?: string;
   };
   onSubmit?: (values: {
@@ -39,12 +39,12 @@ interface Props {
     responsibleEngineerId: number;
     modelYear: string;
     phase: string;
-    carLeader?: string;
+    carLeaderId?: number;
     changeDescription?: string;
     associatedDocument?: string;
     composite?: string;
     issue?: string;
-    target?: string;
+    dreId?: number;
     reassignmentReason?: string;
   }) => void;
 }
@@ -80,9 +80,6 @@ export default function DocumentForm({
   );
   const [modelYear, setModelYear] = useState(initialValues?.modelYear ?? '');
   const [phase, setPhase] = useState(initialValues?.phase ?? '');
-  const [carLeader, setCarLeader] = useState(
-    initialValues?.carLeader ?? '',
-  );
   const [changeDescription, setChangeDescription] = useState(
     initialValues?.changeDescription ?? '',
   );
@@ -91,7 +88,9 @@ export default function DocumentForm({
   );
   const [composite, setComposite] = useState(initialValues?.composite ?? '');
   const [issue, setIssue] = useState(initialValues?.issue ?? '');
-  const [target, setTarget] = useState(initialValues?.target ?? '');
+  const [dreId, setDreId] = useState(() =>
+    initialValues?.dreId ? String(initialValues.dreId) : '',
+  );
   const [reassignmentReason, setReassignmentReason] = useState(
     initialValues?.reassignmentReason ?? '',
   );
@@ -107,7 +106,7 @@ export default function DocumentForm({
     associatedDocument: '',
     composite: '',
     issue: '',
-    target: '',
+    dreId: '',
     reassignmentReason: '',
   });
 
@@ -125,6 +124,22 @@ export default function DocumentForm({
     [options.responsibleEngineers, programCode],
   );
 
+  const filteredCarLeaders = useMemo(
+    () =>
+      options.carLeaders.filter(
+        (carLeader) => carLeader.programCode === programCode,
+      ),
+    [options.carLeaders, programCode],
+  );
+
+  const selectedCarLeader = filteredCarLeaders[0] ?? null;
+  const hasSingleCarLeader = filteredCarLeaders.length === 1;
+
+  const filteredDres = useMemo(
+    () => options.dres.filter((dre) => dre.programCode === programCode),
+    [options.dres, programCode],
+  );
+
   const isFormValid =
     type &&
     programCode &&
@@ -137,6 +152,7 @@ export default function DocumentForm({
     setProgramCode(nextProgramCode);
     setFamilyId('');
     setResponsibleEngineerId('');
+    setDreId('');
   }
 
   function validate() {
@@ -152,7 +168,7 @@ export default function DocumentForm({
       associatedDocument: '',
       composite: '',
       issue: '',
-      target: '',
+      dreId: '',
       reassignmentReason: '',
     };
 
@@ -166,8 +182,11 @@ export default function DocumentForm({
     if (!phase) newErrors.phase = 'Phase is required';
 
     if (type === 'BCN' || type === 'DCN') {
-      if (!carLeader.trim()) {
-        newErrors.carLeader = 'Car leader is required';
+      if (!selectedCarLeader) {
+        newErrors.carLeader = 'Car leader is required for the selected program';
+      } else if (!hasSingleCarLeader) {
+        newErrors.carLeader =
+          'The selected program must have exactly one car leader';
       }
 
       if (!changeDescription.trim()) {
@@ -184,8 +203,8 @@ export default function DocumentForm({
         newErrors.issue = 'Issue is required';
       }
 
-      if (!target.trim()) {
-        newErrors.target = 'Target is required';
+      if (!dreId) {
+        newErrors.dreId = 'DRE is required';
       }
     }
 
@@ -219,12 +238,12 @@ export default function DocumentForm({
       responsibleEngineerId: Number(responsibleEngineerId),
       modelYear,
       phase,
-      carLeader: carLeader || undefined,
+      carLeaderId: selectedCarLeader?.id,
       changeDescription: changeDescription || undefined,
       associatedDocument: associatedDocument || undefined,
       composite: composite || undefined,
       issue: issue || undefined,
-      target: target || undefined,
+      dreId: dreId ? Number(dreId) : undefined,
       reassignmentReason: reassignmentReason || undefined,
     });
   }
@@ -371,11 +390,17 @@ export default function DocumentForm({
           <label>Car Leader</label>
           <input
             type="text"
-            value={carLeader}
-            onChange={(e) => setCarLeader(e.target.value)}
-            disabled={loading}
+            value={selectedCarLeader?.name ?? ''}
+            readOnly
+            disabled={loading || !programCode}
+            placeholder="Assigned automatically from program"
           />
         </div>
+      )}
+      {(type === 'BCN' || type === 'DCN') && !programCode && (
+        <span className="form-hint">
+          Choose a program first to see the assigned car leader.
+        </span>
       )}
       {errors.carLeader && (
         <span className="form-error">{errors.carLeader}</span>
@@ -423,15 +448,24 @@ export default function DocumentForm({
           {errors.issue && <span className="form-error">{errors.issue}</span>}
 
           <div className="form-field">
-            <label>Target</label>
-            <input
-              type="text"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              disabled={loading}
-            />
+            <label>DRE</label>
+            <select
+              value={dreId}
+              onChange={(e) => setDreId(e.target.value)}
+              disabled={loading || !programCode}
+            >
+              <option value="">Select DRE</option>
+              {filteredDres.map((dre) => (
+                <option key={dre.id} value={dre.id}>
+                  {dre.name}
+                </option>
+              ))}
+            </select>
           </div>
-          {errors.target && <span className="form-error">{errors.target}</span>}
+          {!programCode && (
+            <span className="form-hint">Choose a program first to see DREs.</span>
+          )}
+          {errors.dreId && <span className="form-error">{errors.dreId}</span>}
         </>
       )}
 

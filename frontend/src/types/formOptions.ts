@@ -16,6 +16,18 @@ export interface FamilyOption {
   programCode: string;
 }
 
+export interface CarLeaderOption {
+  id: number;
+  name: string;
+  programCode: string;
+}
+
+export interface DreOption {
+  id: number;
+  name: string;
+  programCode: string;
+}
+
 export interface ResponsibleEngineerOption {
   id: number;
   name: string;
@@ -26,5 +38,7 @@ export interface DocumentFormOptions {
   documentTypes: DocumentTypeOption[];
   programs: ProgramOption[];
   families: FamilyOption[];
+  carLeaders: CarLeaderOption[];
+  dres: DreOption[];
   responsibleEngineers: ResponsibleEngineerOption[];
 }

@@ -297,8 +297,9 @@ Server=tcp:TU_SERVIDOR.database.windows.net,1433;Initial Catalog=EngineeringRegi
 1. En Render, usa **New +** -> **Blueprint**.
 2. Conecta el repo `itAlex97/folio-system` y selecciona la rama `backend-aspnet`.
 3. Render detectará `render.yaml` y propondrá:
-  - `folio-system-api` (Web Service con Docker)
-  - `folio-system-web` (Static Site)
+
+- `folio-system-api` (Web Service con Docker)
+- `folio-system-web` (Static Site)
 
 ### 3) Variables de entorno del backend
 
