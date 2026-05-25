@@ -72,6 +72,7 @@ public class EngineeringRegistryDbContext(DbContextOptions<EngineeringRegistryDb
             entity.Property(user => user.Username).HasMaxLength(50).IsRequired();
             entity.Property(user => user.PasswordHash).HasMaxLength(255).IsRequired();
             entity.Property(user => user.Role).HasMaxLength(20).IsRequired();
+            entity.Property(user => user.IsAdmin).HasDefaultValue(false);
             entity.Property(user => user.JobTitle).HasMaxLength(100);
             entity.Property(user => user.Location).HasMaxLength(100);
             entity.Property(user => user.IsActive).HasDefaultValue(true);

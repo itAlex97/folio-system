@@ -1,0 +1,84 @@
+# TODO Folio System
+
+## MVP / Funcionalidad Básica
+- Actualizar README con estado real: `FolioDB`, scripts nuevos, DRE en DFM, flujo actual.
+- Confirmar flujo completo: login -> crear BCN/DCN/DFM -> editar -> cerrar/cancelar/reabrir -> eliminar.
+- Revisar que todos los roles funcionen como se espera: ADMIN, LEADER, ENGINEER, DRAFTER.
+- Agregar estado vacío claro en tabla de documentos.
+- Validar scripts SQL desde cero: `create-folio-db.sql` + `seed-folio-db.sql`.
+
+## Técnico / Calidad
+- Confirmar backend build con el proceso `backend.exe` cerrado.
+- Mantener frontend `npm run lint` y `npm run build` en verde.
+- Agregar pruebas mínimas:
+  - login
+  - creación de documento
+  - edición por rol
+  - cambio de estado
+- Revisar si conviene migrar de SQL scripts manuales a EF migrations.
+- Limpiar compatibilidad interna de auth basada en `X-Auth-User-Id` cuando ya no sea necesaria.
+
+## UX/UI
+- Reemplazar `window.prompt` y `window.confirm` por modales/formularios.
+- Prioridad de modales:
+  - Change Status con razón.
+  - Delete con razón.
+  - Reopen con razón.
+- Convertir Admin Users de prompts a formulario dentro de la página.
+- Convertir Admin Catalogs de prompts a formularios inline.
+- Pulir tabla de documentos:
+  - filtros
+  - header
+  - estado vacío
+  - mensajes de error/loading
+- Revisar responsividad básica en mobile/tablet.
+
+## Auditoría / Historial
+- Crear tabla `EngineeringChangeAuditLog`.
+- Guardar:
+  - documento
+  - usuario
+  - acción
+  - razón
+  - fecha
+  - estado anterior
+  - estado nuevo
+  - before/after JSON opcional
+- Registrar eventos:
+  - create
+  - edit
+  - close
+  - cancel
+  - reopen
+  - status change
+  - delete
+- Mostrar historial en detalle del documento.
+
+## Seguridad / Producción
+- Eliminar fallback de password plano.
+- Dejar passwords obligatoriamente en hash fuerte, idealmente PBKDF2.
+- Migrar hashes viejos `SHA256` a PBKDF2.
+- Leer usuario autenticado desde claims JWT, no desde header interno.
+- Proteger todos los endpoints con validación real de auth/rol.
+- Mover secretos reales a variables de entorno:
+  - JWT key
+  - connection string
+  - CORS origins
+- Revisar CORS para producción.
+- Agregar expiración/renovación de sesión si aplica.
+
+## Deploy / Operación
+- Confirmar deploy backend en Render.
+- Confirmar deploy frontend con API correcta.
+- Probar conexión real a SQL Server/DB destino.
+- Documentar pasos mínimos para levantar ambiente local.
+- Agregar checklist de release/demo.
+
+## Orden Recomendado
+1. MVP básico funcionando end-to-end.
+2. Limpieza técnica: build/lint/docs/scripts.
+3. UX de prompts críticos.
+4. Admin usable.
+5. Auditoría real.
+6. Seguridad fuerte para producción.
+7. Deploy final y hardening.

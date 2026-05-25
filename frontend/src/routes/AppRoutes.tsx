@@ -16,6 +16,7 @@ import DocumentsTypePage from '../pages/DocumentsTypePage';
 import AdminUsersPage from '../pages/AdminUsersPage';
 import AdminCatalogsPage from '../pages/AdminCatalogsPage';
 import AdminReportsPage from '../pages/AdminReportsPage';
+import AdminHomePage from '../pages/AdminHomePage';
 
 function RequireAuth() {
   const { isAuthenticated } = useAuth();
@@ -40,9 +41,8 @@ function LoginRoute() {
 
 function RequireAdmin() {
   const { user } = useAuth();
-  const normalizedRole = user?.role?.toUpperCase() ?? '';
 
-  if (normalizedRole !== 'ADMIN') {
+  if (!user?.isAdmin) {
     return <Navigate to="/documents" replace />;
   }
 
@@ -74,6 +74,7 @@ export default function AppRoutes() {
           />
 
           <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<AdminHomePage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/catalogs" element={<AdminCatalogsPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />

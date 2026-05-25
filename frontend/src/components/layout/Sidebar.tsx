@@ -1,9 +1,14 @@
-import { NavLink } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../auth/useAuth';
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const isAdmin = (user?.role?.toUpperCase() ?? '') === 'ADMIN';
+  const location = useLocation();
+  const isAdmin = Boolean(user?.isAdmin);
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const [isAdminOpen, setIsAdminOpen] = useState(isAdminRoute);
 
   return (
     <aside className="sidebar">
@@ -41,34 +46,62 @@ export default function Sidebar() {
 
         {isAdmin && (
           <>
-            <span className="sidebar-section-label">Admin</span>
+            <span className="sidebar-section-label">System</span>
 
             <NavLink
-              to="/admin/users"
+              to="/admin"
+              end
+              onClick={() => setIsAdminOpen((current) => !current)}
               className={({ isActive }) =>
                 `nav-item ${isActive ? 'active' : ''}`
               }
             >
-              Users
+              <span>Administracion</span>
+              {isAdminOpen ? (
+                <ChevronDown
+                  size={16}
+                  className="sidebar-chevron"
+                  aria-hidden="true"
+                />
+              ) : (
+                <ChevronRight
+                  size={16}
+                  className="sidebar-chevron"
+                  aria-hidden="true"
+                />
+              )}
             </NavLink>
 
-            <NavLink
-              to="/admin/catalogs"
-              className={({ isActive }) =>
-                `nav-item ${isActive ? 'active' : ''}`
-              }
-            >
-              Catalogs
-            </NavLink>
+            {isAdminOpen && (
+              <div className="sidebar-submenu">
+                <NavLink
+                  to="/admin/users"
+                  className={({ isActive }) =>
+                    `sidebar-subitem ${isActive ? 'active' : ''}`
+                  }
+                >
+                  Users
+                </NavLink>
 
-            <NavLink
-              to="/admin/reports"
-              className={({ isActive }) =>
-                `nav-item ${isActive ? 'active' : ''}`
-              }
-            >
-              Audit and Reports
-            </NavLink>
+                <NavLink
+                  to="/admin/catalogs"
+                  className={({ isActive }) =>
+                    `sidebar-subitem ${isActive ? 'active' : ''}`
+                  }
+                >
+                  Catalogs
+                </NavLink>
+
+                <NavLink
+                  to="/admin/reports"
+                  className={({ isActive }) =>
+                    `sidebar-subitem ${isActive ? 'active' : ''}`
+                  }
+                >
+                  Audit and Reports
+                </NavLink>
+              </div>
+            )}
           </>
         )}
       </nav>

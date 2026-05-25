@@ -207,11 +207,11 @@ VALUES
 (1,'Oscar Eduardo', 'Navarro','onavarro',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','onavarro'),2),'engineer','Product Engineer','Torres'),
 (1,'Selena', 'Minjares','sminjares',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','sminjares'),2),'drafter','Drafter','Torres'),
 (1,'Verónica', 'Garcia','vgarciarios',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','vgarciarios'),2),'engineer','Product Engineer','Torres'),
-(1,'Laura Cristina', 'Andrade','landradecardosa',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','landradecardosa'),2),'lead','Lead Product','Torres'),
+(1,'Laura Cristina', 'Andrade','landradecardosa',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','landradecardosa'),2),'leader','Lead Product','Torres'),
 
 /* ===== 31XX ===== */
 
-(2,'Jorge Azahel', 'Valles','jvalles',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','jvalles'),2),'lead','Lead Product','Torres'),
+(2,'Jorge Azahel', 'Valles','jvalles',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','jvalles'),2),'leader','Lead Product','Torres'),
 (2,'Diana Cristina', 'Quiroz','dquirozresendez',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','dquirozresendez'),2),'drafter','Drafter','Torres'),
 (2,'Dixie Alejandra', 'Arenivas','darenivasaguirre',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','darenivasaguirre'),2),'drafter','Drafter','Torres'),
 (2,'Fidel Ernesto', 'Arellano','farellanohinojosa',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','farellanohinojosa'),2),'drafter','Drafter','Torres'),
@@ -228,7 +228,7 @@ VALUES
 (3,'Claudia Elena', 'Preciado','cpreciadovargas',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','cpreciadovargas'),2),'drafter','Drafter','Monarca'),
 (3,'Jose Ivan', 'Hernandez','jhernandez66',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','jhernandez66'),2),'engineer','Product Engineer','Monarca'),
 (3,'Silvia Nayeli', 'Meza','smeza01',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','smeza01'),2),'engineer','Product Engineer','Monarca'),
-(3,'Lino', 'Loera','lloera01',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','lloera01'),2),'lead','Lead Product','Monarca'),
+(3,'Lino', 'Loera','lloera01',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','lloera01'),2),'leader','Lead Product','Monarca'),
 
 /* ===== CX727 ===== */
 
@@ -236,6 +236,6 @@ VALUES
 (4,'Adriana Ivette', 'Licon','alicon',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','alicon'),2),'engineer','Product Engineer','Monarca'),
 (4,'Eduardo Manuel', 'Reyes','ereyes03',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','ereyes03'),2),'engineer','Product Engineer','Monarca'),
 (4,'Nohemi', 'De la Cruz','ndelacruzgarcia',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','ndelacruzgarcia'),2),'drafter','Drafter','Monarca'),
-(4,'Myrna Lizeth', 'Rodriguez','mrodriguezcamargo',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','mrodriguezcamargo'),2),'lead','Lead Product','Monarca');
+(4,'Myrna Lizeth', 'Rodriguez','mrodriguezcamargo',CONVERT(VARCHAR(64),HASHBYTES('SHA2_256','mrodriguezcamargo'),2),'leader','Lead Product','Monarca');
 
 GO

@@ -4,10 +4,8 @@ import {
   ArrowLeft,
   Edit,
   CheckCircle,
-  XCircle,
   RotateCcw,
-  RefreshCw,
-  Trash2,
+  XCircle,
 } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
 import DocumentDetail from '../components/documents/DocumentDetail';
@@ -19,9 +17,7 @@ import { useDocument } from '../hooks/useDocument';
 import type { Document } from '../types/document';
 import {
   cancelDocument,
-  changeDocumentStatus,
   closeDocument,
-  deleteDocument,
   reopenDocument,
   updateDocument,
 } from '../services/documentService';
@@ -38,6 +34,7 @@ export default function DocumentDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [flashMessage, setFlashMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,7 +65,7 @@ export default function DocumentDetailPage() {
     normalizedRole === 'ENGINEER' &&
     user?.id === effectiveDocument?.responsibleEngineerId;
   const isLeader = normalizedRole === 'LEADER';
-  const isAdmin = normalizedRole === 'ADMIN';
+  const isAdmin = Boolean(user?.isAdmin);
   const isLeaderInProgram =
     isLeader && user?.programCode === effectiveDocument?.program;
   const canCloseDocument =
@@ -79,8 +76,8 @@ export default function DocumentDetailPage() {
   const canEditDocument =
     currentStatus === 'OPEN' &&
     (isResponsibleEngineer || isLeaderInProgram || isAdmin);
-  const canReopenDocument = isAdmin && currentStatus !== 'OPEN';
-  const canDeleteDocument = isAdmin && currentStatus !== 'CLOSED';
+  const canReopenDocument =
+    currentStatus === 'CANCELLED' && (isLeaderInProgram || isAdmin);
 
   if (loading) {
     return (
@@ -184,139 +181,13 @@ export default function DocumentDetailPage() {
           <Button
             variant="secondary"
             disabled={isSubmitting}
-            onClick={async () => {
-              const reason =
-                window.prompt('Reason to reopen this document:')?.trim() ?? '';
-              if (!reason) {
-                return;
-              }
-
-              try {
-                setIsSubmitting(true);
-                setActionError('');
-
-                const updatedDocument = await reopenDocument(
-                  effectiveDocument.id,
-                  reason,
-                );
-                setDocumentOverride(updatedDocument);
-                setFlashMessage('Document reopened successfully.');
-              } catch (submitIssue) {
-                setActionError(
-                  submitIssue instanceof Error
-                    ? submitIssue.message
-                    : 'Unable to reopen document.',
-                );
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
+            onClick={() => setShowReopenDialog(true)}
           >
             <RotateCcw size={16} className="button-icon" />
             Reopen
           </Button>
         )}
 
-        {!isEditing && isAdmin && (
-          <Button
-            variant="secondary"
-            disabled={isSubmitting}
-            onClick={async () => {
-              const statusPrompt = window.prompt(
-                'New status (OPEN, CLOSED, CANCELLED):',
-                currentStatus,
-              );
-              const normalizedStatus = statusPrompt?.trim().toUpperCase() ?? '';
-
-              if (
-                normalizedStatus !== 'OPEN' &&
-                normalizedStatus !== 'CLOSED' &&
-                normalizedStatus !== 'CANCELLED'
-              ) {
-                return;
-              }
-
-              const nextStatus = normalizedStatus as
-                | 'OPEN'
-                | 'CLOSED'
-                | 'CANCELLED';
-
-              const reason =
-                window.prompt('Reason for status change:')?.trim() ?? '';
-              if (!reason) {
-                return;
-              }
-
-              try {
-                setIsSubmitting(true);
-                setActionError('');
-
-                const updatedDocument = await changeDocumentStatus(
-                  effectiveDocument.id,
-                  nextStatus,
-                  reason,
-                );
-                setDocumentOverride(updatedDocument);
-                setFlashMessage(`Document status changed to ${nextStatus}.`);
-              } catch (submitIssue) {
-                setActionError(
-                  submitIssue instanceof Error
-                    ? submitIssue.message
-                    : 'Unable to change status.',
-                );
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
-          >
-            <RefreshCw size={16} className="button-icon" />
-            Change Status
-          </Button>
-        )}
-
-        {!isEditing && canDeleteDocument && (
-          <Button
-            variant="danger"
-            disabled={isSubmitting}
-            onClick={async () => {
-              const confirmDelete = window.confirm(
-                'Delete this document? CLOSED documents cannot be deleted.',
-              );
-              if (!confirmDelete) {
-                return;
-              }
-
-              const reason =
-                window.prompt('Reason for deletion:')?.trim() ?? '';
-              if (!reason) {
-                return;
-              }
-
-              try {
-                setIsSubmitting(true);
-                setActionError('');
-
-                await deleteDocument(effectiveDocument.id, reason);
-
-                navigate(returnTo, {
-                  replace: true,
-                  state: { flashMessage: 'Document deleted successfully.' },
-                });
-              } catch (submitIssue) {
-                setActionError(
-                  submitIssue instanceof Error
-                    ? submitIssue.message
-                    : 'Unable to delete document.',
-                );
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
-          >
-            <Trash2 size={16} className="button-icon" />
-            Delete
-          </Button>
-        )}
       </PageHeader>
 
       <p className="document-meta">
@@ -330,82 +201,93 @@ export default function DocumentDetailPage() {
         </p>
       )}
 
-      {!isEditing && <DocumentDetail document={effectiveDocument} />}
+      <DocumentDetail document={effectiveDocument} />
 
-      {isEditing && formOptions && (
-        <DocumentForm
-          initialType={effectiveDocument.type}
-          isTypeLocked
-          initialProgramCode={effectiveDocument.program}
-          isProgramLocked
-          initialValues={{
-            familyId: effectiveDocument.familyId,
-            responsibleEngineerId: effectiveDocument.responsibleEngineerId,
-            modelYear: effectiveDocument.modelYear ?? '',
-            phase: effectiveDocument.phase ?? '',
-            carLeaderId: effectiveDocument.carLeaderId ?? undefined,
-            changeDescription: effectiveDocument.changeDescription ?? '',
-            associatedDocument: effectiveDocument.associatedDocument ?? '',
-            composite: effectiveDocument.composite ?? '',
-            issue: effectiveDocument.issue ?? '',
-            dreId: effectiveDocument.dreId ?? undefined,
-          }}
-          options={formOptions}
-          loading={formOptionsLoading || isSubmitting}
-          error={actionError || formOptionsError}
-          submitLabel="Save Changes"
-          showReassignmentReason={isLeaderInProgram}
-          initialResponsibleEngineerId={effectiveDocument.responsibleEngineerId}
-          onCancel={() => {
-            if (!isSubmitting) {
-              setIsEditing(false);
-              setActionError('');
-            }
-          }}
-          onSubmit={async (values) => {
-            try {
-              setIsSubmitting(true);
-              setActionError('');
+      {isEditing && (
+        <div className="modal-overlay">
+          <div className="modal modal-large">
+            <h2 className="modal-title">Edit Document</h2>
 
-              const updatedDocument = await updateDocument(
-                effectiveDocument.id,
-                {
-                  familyId: values.familyId,
-                  responsibleEngineerId: values.responsibleEngineerId,
-                  reassignmentReason: values.reassignmentReason,
-                  modelYear: values.modelYear,
-                  phase: values.phase,
-                  carLeaderId: values.carLeaderId,
-                  changeDescription: values.changeDescription,
-                  associatedDocument: values.associatedDocument,
-                  composite: values.composite,
-                  issue: values.issue,
-                  dreId: values.dreId,
-                },
-              );
+            {formOptions ? (
+              <DocumentForm
+                initialType={effectiveDocument.type}
+                isTypeLocked
+                initialProgramCode={effectiveDocument.program}
+                isProgramLocked
+                initialValues={{
+                  familyId: effectiveDocument.familyId,
+                  responsibleEngineerId:
+                    effectiveDocument.responsibleEngineerId,
+                  modelYear: effectiveDocument.modelYear ?? '',
+                  phase: effectiveDocument.phase ?? '',
+                  carLeaderId: effectiveDocument.carLeaderId ?? undefined,
+                  changeDescription:
+                    effectiveDocument.changeDescription ?? '',
+                  associatedDocument:
+                    effectiveDocument.associatedDocument ?? '',
+                  composite: effectiveDocument.composite ?? '',
+                  issue: effectiveDocument.issue ?? '',
+                  dreId: effectiveDocument.dreId ?? undefined,
+                }}
+                options={formOptions}
+                loading={formOptionsLoading || isSubmitting}
+                error={actionError || formOptionsError}
+                submitLabel="Save Changes"
+                showReassignmentReason={isLeaderInProgram}
+                initialResponsibleEngineerId={
+                  effectiveDocument.responsibleEngineerId
+                }
+                onCancel={() => {
+                  if (!isSubmitting) {
+                    setIsEditing(false);
+                    setActionError('');
+                  }
+                }}
+                onSubmit={async (values) => {
+                  try {
+                    setIsSubmitting(true);
+                    setActionError('');
 
-              setDocumentOverride(updatedDocument);
-              setFlashMessage('Document updated successfully.');
-              setIsEditing(false);
-            } catch (submitIssue) {
-              setActionError(
-                submitIssue instanceof Error
-                  ? submitIssue.message
-                  : 'Unable to update document.',
-              );
-            } finally {
-              setIsSubmitting(false);
-            }
-          }}
-        />
-      )}
+                    const updatedDocument = await updateDocument(
+                      effectiveDocument.id,
+                      {
+                        familyId: values.familyId,
+                        responsibleEngineerId: values.responsibleEngineerId,
+                        reassignmentReason: values.reassignmentReason,
+                        modelYear: values.modelYear,
+                        phase: values.phase,
+                        carLeaderId: values.carLeaderId,
+                        changeDescription: values.changeDescription,
+                        associatedDocument: values.associatedDocument,
+                        composite: values.composite,
+                        issue: values.issue,
+                        dreId: values.dreId,
+                      },
+                    );
 
-      {isEditing && !formOptions && (
-        <p className="document-meta">
-          {formOptionsLoading
-            ? 'Loading edit form options...'
-            : `Unable to load edit form options: ${formOptionsError}`}
-        </p>
+                    setDocumentOverride(updatedDocument);
+                    setFlashMessage('Document updated successfully.');
+                    setIsEditing(false);
+                  } catch (submitIssue) {
+                    setActionError(
+                      submitIssue instanceof Error
+                        ? submitIssue.message
+                        : 'Unable to update document.',
+                    );
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+              />
+            ) : (
+              <p className="document-meta">
+                {formOptionsLoading
+                  ? 'Loading edit form options...'
+                  : `Unable to load edit form options: ${formOptionsError}`}
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
       {showCancelDialog && (
@@ -433,6 +315,40 @@ export default function DocumentDetailPage() {
                 submitIssue instanceof Error
                   ? submitIssue.message
                   : 'Unable to cancel document.',
+              );
+            } finally {
+              setIsSubmitting(false);
+            }
+          }}
+        />
+      )}
+
+      {showReopenDialog && (
+        <ConfirmDialog
+          title="Reopen Document"
+          message="Reopen this cancelled document and return it to OPEN status?"
+          onCancel={() => {
+            if (!isSubmitting) {
+              setShowReopenDialog(false);
+            }
+          }}
+          onConfirm={async () => {
+            try {
+              setIsSubmitting(true);
+              setActionError('');
+
+              const updatedDocument = await reopenDocument(
+                effectiveDocument.id,
+                'Admin or leader reopen request',
+              );
+              setDocumentOverride(updatedDocument);
+              setFlashMessage('Document reopened successfully.');
+              setShowReopenDialog(false);
+            } catch (submitIssue) {
+              setActionError(
+                submitIssue instanceof Error
+                  ? submitIssue.message
+                  : 'Unable to reopen document.',
               );
             } finally {
               setIsSubmitting(false);

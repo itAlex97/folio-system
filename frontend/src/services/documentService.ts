@@ -177,46 +177,15 @@ export async function updateDocument(
 
 async function patchDocumentStatus(
   id: number,
-  action: 'close' | 'cancel',
+  action: 'close' | 'cancel' | 'reopen',
+  payload?: { reason: string },
 ): Promise<Document> {
   const response = await fetch(
     `${API_BASE}/engineering-changes/${id}/${action}`,
     {
       method: 'PATCH',
-      headers: buildApiHeaders(false),
-    },
-  );
-
-  if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
-
-    try {
-      const errorBody = (await response.json()) as { message?: string };
-      if (errorBody.message) {
-        message = errorBody.message;
-      }
-    } catch {
-      // Keep fallback message.
-    }
-
-    throw new Error(message);
-  }
-
-  const document = (await response.json()) as EngineeringChangeApiResponse;
-  return mapDocument(document);
-}
-
-async function patchDocumentStatusWithBody(
-  id: number,
-  action: 'reopen' | 'status',
-  payload: { status?: DocumentStatus; reason: string },
-): Promise<Document> {
-  const response = await fetch(
-    `${API_BASE}/engineering-changes/${id}/${action}`,
-    {
-      method: 'PATCH',
-      headers: buildApiHeaders(true),
-      body: JSON.stringify(payload),
+      headers: buildApiHeaders(Boolean(payload)),
+      body: payload ? JSON.stringify(payload) : undefined,
     },
   );
 
@@ -248,39 +217,5 @@ export function cancelDocument(id: number): Promise<Document> {
 }
 
 export function reopenDocument(id: number, reason: string): Promise<Document> {
-  return patchDocumentStatusWithBody(id, 'reopen', { reason });
-}
-
-export function changeDocumentStatus(
-  id: number,
-  status: DocumentStatus,
-  reason: string,
-): Promise<Document> {
-  return patchDocumentStatusWithBody(id, 'status', { status, reason });
-}
-
-export async function deleteDocument(
-  id: number,
-  reason: string,
-): Promise<void> {
-  const response = await fetch(`${API_BASE}/engineering-changes/${id}`, {
-    method: 'DELETE',
-    headers: buildApiHeaders(true),
-    body: JSON.stringify({ reason }),
-  });
-
-  if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
-
-    try {
-      const errorBody = (await response.json()) as { message?: string };
-      if (errorBody.message) {
-        message = errorBody.message;
-      }
-    } catch {
-      // Keep fallback message.
-    }
-
-    throw new Error(message);
-  }
+  return patchDocumentStatus(id, 'reopen', { reason });
 }

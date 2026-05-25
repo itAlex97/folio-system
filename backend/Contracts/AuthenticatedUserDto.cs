@@ -6,6 +6,7 @@ public class AuthenticatedUserDto
     public string Name { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public bool IsAdmin { get; set; }
     public string ProgramCode { get; set; } = string.Empty;
     public string ProgramName { get; set; } = string.Empty;
 }

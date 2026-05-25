@@ -113,6 +113,7 @@ static AuthenticatedUserDto MapAuthenticatedUser(UserEntity user)
         Name = user.DisplayName,
         Username = user.Username,
         Role = user.Role,
+        IsAdmin = user.IsAdmin,
         ProgramCode = user.Program.Code,
         ProgramName = user.Program.Name ?? user.Program.Code
     };
@@ -153,12 +154,12 @@ static bool IsLeader(UserEntity user)
 
 static bool IsAdmin(UserEntity user)
 {
-    return IsRole(user, "ADMIN");
+    return user.IsAdmin;
 }
 
 static bool IsProgramScopedUser(UserEntity user)
 {
-    return IsDrafter(user) || IsEngineer(user) || IsLeader(user);
+    return !IsAdmin(user) && (IsDrafter(user) || IsEngineer(user) || IsLeader(user));
 }
 
 static bool VerifyPassword(string plainPassword, string storedPassword)
@@ -871,6 +872,58 @@ app.MapPatch("/api/engineering-changes/{id:int}/cancel", async (
     return Results.Ok(MapEngineeringChange(updatedDocument));
 });
 
+app.MapPatch("/api/engineering-changes/{id:int}/reopen", async (
+    HttpContext httpContext,
+    int id,
+    ReopenEngineeringChangeRequestDto request,
+    EngineeringRegistryDbContext dbContext) =>
+{
+    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
+    if (authenticatedUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var document = await dbContext.EngineeringChanges
+        .SingleOrDefaultAsync(change => change.Id == id);
+
+    if (document is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (IsProgramScopedUser(authenticatedUser) && document.ProgramId != authenticatedUser.ProgramId)
+    {
+        return Results.StatusCode(403);
+    }
+
+    if (!IsAdmin(authenticatedUser) && !IsLeader(authenticatedUser))
+    {
+        return Results.StatusCode(403);
+    }
+
+    if (document.Status != "CANCELLED")
+    {
+        return Results.BadRequest(new { message = "Only CANCELLED documents can be reopened." });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Reason))
+    {
+        return Results.BadRequest(new { message = "Reason is required to reopen a document." });
+    }
+
+    document.Status = "OPEN";
+    document.ClosedAt = null;
+
+    await dbContext.SaveChangesAsync();
+
+    var updatedDocument = await BuildEngineeringChangeQuery(dbContext)
+        .Where(change => change.Id == id)
+        .SingleAsync();
+
+    return Results.Ok(MapEngineeringChange(updatedDocument));
+});
+
 app.MapPost("/api/engineering-changes", async (
     HttpContext httpContext,
     CreateEngineeringChangeRequestDto request,
@@ -1138,161 +1191,6 @@ app.MapPost("/api/engineering-changes", async (
     return Results.Created($"/api/engineering-changes/{createdDocument.Id}", MapEngineeringChange(createdDocument));
 });
 
-app.MapPatch("/api/engineering-changes/{id:int}/reopen", async (
-    HttpContext httpContext,
-    int id,
-    ChangeStatusRequestDto request,
-    EngineeringRegistryDbContext dbContext) =>
-{
-    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
-    if (authenticatedUser is null)
-    {
-        return Results.Unauthorized();
-    }
-
-    if (!IsAdmin(authenticatedUser))
-    {
-        return Results.StatusCode(403);
-    }
-
-    if (string.IsNullOrWhiteSpace(request.Reason))
-    {
-        return Results.BadRequest(new { message = "Reason is required to reopen a document." });
-    }
-
-    var document = await dbContext.EngineeringChanges
-        .SingleOrDefaultAsync(change => change.Id == id);
-
-    if (document is null)
-    {
-        return Results.NotFound();
-    }
-
-    if (document.Status == "OPEN")
-    {
-        return Results.BadRequest(new { message = "Document is already OPEN." });
-    }
-
-    document.Status = "OPEN";
-    document.ClosedAt = null;
-
-    await dbContext.SaveChangesAsync();
-
-    var updatedDocument = await BuildEngineeringChangeQuery(dbContext)
-        .Where(change => change.Id == id)
-        .SingleAsync();
-
-    return Results.Ok(MapEngineeringChange(updatedDocument));
-});
-
-app.MapPatch("/api/engineering-changes/{id:int}/status", async (
-    HttpContext httpContext,
-    int id,
-    ChangeStatusRequestDto request,
-    EngineeringRegistryDbContext dbContext) =>
-{
-    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
-    if (authenticatedUser is null)
-    {
-        return Results.Unauthorized();
-    }
-
-    if (!IsAdmin(authenticatedUser))
-    {
-        return Results.StatusCode(403);
-    }
-
-    var normalizedStatus = request.Status?.Trim().ToUpperInvariant();
-    if (normalizedStatus is not ("OPEN" or "CLOSED" or "CANCELLED"))
-    {
-        return Results.BadRequest(new { message = "Status must be OPEN, CLOSED or CANCELLED." });
-    }
-
-    if (string.IsNullOrWhiteSpace(request.Reason))
-    {
-        return Results.BadRequest(new { message = "Reason is required to change status." });
-    }
-
-    var document = await dbContext.EngineeringChanges
-        .SingleOrDefaultAsync(change => change.Id == id);
-
-    if (document is null)
-    {
-        return Results.NotFound();
-    }
-
-    document.Status = normalizedStatus;
-    document.ClosedAt = normalizedStatus == "OPEN" ? null : DateTime.UtcNow;
-
-    await dbContext.SaveChangesAsync();
-
-    var updatedDocument = await BuildEngineeringChangeQuery(dbContext)
-        .Where(change => change.Id == id)
-        .SingleAsync();
-
-    return Results.Ok(MapEngineeringChange(updatedDocument));
-});
-
-app.MapDelete("/api/engineering-changes/{id:int}", async (
-    HttpContext httpContext,
-    int id,
-    [FromBody] DeleteEngineeringChangeRequestDto request,
-    EngineeringRegistryDbContext dbContext) =>
-{
-    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
-    if (authenticatedUser is null)
-    {
-        return Results.Unauthorized();
-    }
-
-    if (!IsAdmin(authenticatedUser))
-    {
-        return Results.StatusCode(403);
-    }
-
-    if (string.IsNullOrWhiteSpace(request.Reason))
-    {
-        return Results.BadRequest(new { message = "Reason is required to delete a document." });
-    }
-
-    var document = await dbContext.EngineeringChanges
-        .Include(change => change.BcnDetail)
-        .Include(change => change.DcnDetail)
-        .Include(change => change.DfmDetail)
-        .SingleOrDefaultAsync(change => change.Id == id);
-
-    if (document is null)
-    {
-        return Results.NotFound();
-    }
-
-    // Exception policy: keep CLOSED documents for historical traceability.
-    if (document.Status == "CLOSED")
-    {
-        return Results.BadRequest(new { message = "CLOSED documents cannot be deleted." });
-    }
-
-    if (document.BcnDetail is not null)
-    {
-        dbContext.EngineeringChangeBcnDetails.Remove(document.BcnDetail);
-    }
-
-    if (document.DcnDetail is not null)
-    {
-        dbContext.EngineeringChangeDcnDetails.Remove(document.DcnDetail);
-    }
-
-    if (document.DfmDetail is not null)
-    {
-        dbContext.EngineeringChangeDfmDetails.Remove(document.DfmDetail);
-    }
-
-    dbContext.EngineeringChanges.Remove(document);
-    await dbContext.SaveChangesAsync();
-
-    return Results.NoContent();
-});
-
 app.MapGet("/api/admin/users", async (
     HttpContext httpContext,
     EngineeringRegistryDbContext dbContext) =>
@@ -1319,6 +1217,7 @@ app.MapGet("/api/admin/users", async (
             Name = (user.FirstName + " " + user.LastName).Trim(),
             user.Username,
             user.Role,
+            user.IsAdmin,
             user.IsActive,
             ProgramCode = user.Program.Code,
             ProgramName = user.Program.Name
@@ -1375,6 +1274,7 @@ app.MapPatch("/api/admin/users/{id:int}", async (
     user.FirstName = firstName;
     user.LastName = lastName;
     user.Role = normalizedRole;
+    user.IsAdmin = request.IsAdmin;
     user.ProgramId = program.Id;
     user.IsActive = request.IsActive;
 
@@ -1466,6 +1366,55 @@ app.MapPost("/api/admin/programs", async (
     return Results.Ok(new { message = "Program created successfully." });
 });
 
+app.MapPatch("/api/admin/programs/{code}", async (
+    HttpContext httpContext,
+    string code,
+    UpdateProgramRequestDto request,
+    EngineeringRegistryDbContext dbContext) =>
+{
+    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
+    if (authenticatedUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!IsAdmin(authenticatedUser))
+    {
+        return Results.StatusCode(403);
+    }
+
+    var currentCode = code.Trim().ToUpperInvariant();
+    var normalizedCode = request.Code?.Trim().ToUpperInvariant();
+    var normalizedName = request.Name?.Trim();
+
+    if (string.IsNullOrWhiteSpace(currentCode) || string.IsNullOrWhiteSpace(normalizedCode))
+    {
+        return Results.BadRequest(new { message = "Program code is required." });
+    }
+
+    var program = await dbContext.Programs
+        .SingleOrDefaultAsync(item => item.Code == currentCode);
+
+    if (program is null)
+    {
+        return Results.NotFound();
+    }
+
+    var codeExists = await dbContext.Programs
+        .AnyAsync(item => item.Code == normalizedCode && item.Id != program.Id);
+
+    if (codeExists)
+    {
+        return Results.BadRequest(new { message = "Program already exists." });
+    }
+
+    program.Code = normalizedCode;
+    program.Name = normalizedName;
+
+    await dbContext.SaveChangesAsync();
+    return Results.Ok(new { message = "Program updated successfully." });
+});
+
 app.MapPost("/api/admin/document-types", async (
     HttpContext httpContext,
     DocumentTypeOptionDto request,
@@ -1504,6 +1453,55 @@ app.MapPost("/api/admin/document-types", async (
 
     await dbContext.SaveChangesAsync();
     return Results.Ok(new { message = "Document type created successfully." });
+});
+
+app.MapPatch("/api/admin/document-types/{code}", async (
+    HttpContext httpContext,
+    string code,
+    UpdateDocumentTypeRequestDto request,
+    EngineeringRegistryDbContext dbContext) =>
+{
+    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
+    if (authenticatedUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!IsAdmin(authenticatedUser))
+    {
+        return Results.StatusCode(403);
+    }
+
+    var currentCode = code.Trim().ToUpperInvariant();
+    var normalizedCode = request.Code?.Trim().ToUpperInvariant();
+    var normalizedName = request.Name?.Trim();
+
+    if (string.IsNullOrWhiteSpace(currentCode) || string.IsNullOrWhiteSpace(normalizedCode))
+    {
+        return Results.BadRequest(new { message = "Document type code is required." });
+    }
+
+    var documentType = await dbContext.DocumentTypes
+        .SingleOrDefaultAsync(item => item.Code == currentCode);
+
+    if (documentType is null)
+    {
+        return Results.NotFound();
+    }
+
+    var codeExists = await dbContext.DocumentTypes
+        .AnyAsync(item => item.Code == normalizedCode && item.Id != documentType.Id);
+
+    if (codeExists)
+    {
+        return Results.BadRequest(new { message = "Document type already exists." });
+    }
+
+    documentType.Code = normalizedCode;
+    documentType.Name = normalizedName;
+
+    await dbContext.SaveChangesAsync();
+    return Results.Ok(new { message = "Document type updated successfully." });
 });
 
 app.MapPost("/api/admin/families", async (
@@ -1554,6 +1552,64 @@ app.MapPost("/api/admin/families", async (
 
     await dbContext.SaveChangesAsync();
     return Results.Ok(new { message = "Family created successfully." });
+});
+
+app.MapPatch("/api/admin/families/{id:int}", async (
+    HttpContext httpContext,
+    int id,
+    UpdateFamilyRequestDto request,
+    EngineeringRegistryDbContext dbContext) =>
+{
+    var authenticatedUser = await TryGetAuthenticatedActiveUserAsync(httpContext, dbContext);
+    if (authenticatedUser is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!IsAdmin(authenticatedUser))
+    {
+        return Results.StatusCode(403);
+    }
+
+    var normalizedProgramCode = request.ProgramCode?.Trim().ToUpperInvariant();
+    var normalizedName = request.Name?.Trim();
+
+    if (string.IsNullOrWhiteSpace(normalizedProgramCode) || string.IsNullOrWhiteSpace(normalizedName))
+    {
+        return Results.BadRequest(new { message = "Program code and family name are required." });
+    }
+
+    var family = await dbContext.Families
+        .SingleOrDefaultAsync(item => item.Id == id);
+
+    if (family is null)
+    {
+        return Results.NotFound();
+    }
+
+    var program = await dbContext.Programs
+        .SingleOrDefaultAsync(item => item.Code == normalizedProgramCode);
+
+    if (program is null)
+    {
+        return Results.BadRequest(new { message = "Program was not found." });
+    }
+
+    var exists = await dbContext.Families.AnyAsync(item =>
+        item.Id != family.Id &&
+        item.ProgramId == program.Id &&
+        item.Name.ToUpper() == normalizedName.ToUpper());
+
+    if (exists)
+    {
+        return Results.BadRequest(new { message = "Family already exists for this program." });
+    }
+
+    family.ProgramId = program.Id;
+    family.Name = normalizedName;
+
+    await dbContext.SaveChangesAsync();
+    return Results.Ok(new { message = "Family updated successfully." });
 });
 
 app.MapGet("/api/admin/reports/summary", async (

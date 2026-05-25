@@ -9,6 +9,7 @@ public class UserEntity
     public string Username { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public bool IsAdmin { get; set; }
     public string? JobTitle { get; set; }
     public string? Location { get; set; }
     public bool IsActive { get; set; }

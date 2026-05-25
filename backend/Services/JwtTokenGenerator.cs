@@ -41,6 +41,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             new Claim(ClaimTypes.Name, user.DisplayName),
             new Claim(ClaimTypes.GivenName, user.Username),
             new Claim("Role", user.Role),
+            new Claim("IsAdmin", user.IsAdmin ? "true" : "false"),
             new Claim("ProgramId", user.ProgramId.ToString())
         };
 

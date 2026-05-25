@@ -33,6 +33,7 @@ export async function updateAdminUser(
   payload: {
     name: string;
     role: string;
+    isAdmin: boolean;
     programCode: string;
     isActive: boolean;
   },
@@ -67,6 +68,24 @@ export async function createProgram(payload: {
   }
 }
 
+export async function updateProgram(
+  code: string,
+  payload: {
+    code: string;
+    name?: string;
+  },
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/programs/${code}`, {
+    method: 'PATCH',
+    headers: buildApiHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+}
+
 export async function createDocumentType(payload: {
   code: string;
   name?: string;
@@ -82,12 +101,48 @@ export async function createDocumentType(payload: {
   }
 }
 
+export async function updateDocumentType(
+  code: string,
+  payload: {
+    code: string;
+    name?: string;
+  },
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/document-types/${code}`, {
+    method: 'PATCH',
+    headers: buildApiHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+}
+
 export async function createFamily(payload: {
   programCode: string;
   name: string;
 }): Promise<void> {
   const response = await fetch(`${API_BASE}/admin/families`, {
     method: 'POST',
+    headers: buildApiHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+}
+
+export async function updateFamily(
+  id: number,
+  payload: {
+    programCode: string;
+    name: string;
+  },
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/families/${id}`, {
+    method: 'PATCH',
     headers: buildApiHeaders(true),
     body: JSON.stringify(payload),
   });

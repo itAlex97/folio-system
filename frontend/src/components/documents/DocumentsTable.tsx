@@ -14,8 +14,7 @@ export default function DocumentsTable({ type }: Props) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const normalizedRole = user?.role?.toUpperCase() ?? '';
-  const isAdmin = normalizedRole === 'ADMIN';
+  const isAdmin = Boolean(user?.isAdmin);
   const userProgramCode = user?.programCode ?? '';
 
   const { documents, loading, error } = useDocuments({

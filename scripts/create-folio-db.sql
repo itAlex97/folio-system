@@ -99,6 +99,7 @@ CREATE TABLE Users (
     PasswordHash NVARCHAR(255) NOT NULL,
 
     Role NVARCHAR(20) NOT NULL,
+    IsAdmin BIT NOT NULL DEFAULT 0,
     JobTitle NVARCHAR(100),
     Location NVARCHAR(100),
 

@@ -3,6 +3,7 @@ export interface AdminUser {
   name: string;
   username: string;
   role: string;
+  isAdmin: boolean;
   isActive: boolean;
   programCode: string;
   programName?: string | null;

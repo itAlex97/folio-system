@@ -3,6 +3,7 @@ export interface AuthUser {
   name: string;
   username: string;
   role: string;
+  isAdmin: boolean;
   programCode: string;
   programName: string;
 }
