@@ -1,0 +1,1127 @@
+FOLIO SYSTEM - INFORMACION DE NEGOCIO Y TECNICA
+================================================
+
+Este documento complementa al README. El README explica como levantar y ubicar el proyecto; este archivo intenta explicar que problema resuelve el sistema, cuales son sus reglas de negocio, como se implementan, que decisiones tecnicas se tomaron y que riesgos o pendientes existen.
+
+
+1. Resumen ejecutivo
+--------------------
+
+Folio System es una aplicacion interna para controlar folios de cambios de ingenieria. Su proposito principal es que los equipos de producto puedan registrar, consultar, editar, cerrar, cancelar y, en algunos casos, reabrir documentos de cambio asociados a programas de vehiculo o proyecto.
+
+El sistema centraliza la generacion de folios para tres tipos de documento:
+
+- BCN: BOM Change Notice.
+- DCN: Design Change Notice.
+- DFM: Design for Manufacturing.
+
+La aplicacion no es un gestor documental completo ni un sistema de aprobaciones multinivel. El alcance actual es un MVP funcional orientado a trazabilidad basica: crear el registro del cambio, asignarlo a un responsable, guardar campos especificos por tipo, controlar el estado del documento y mantener un historial tecnico de acciones relevantes.
+
+
+2. Problema que intenta resolver
+--------------------------------
+
+Antes de un sistema como este, los folios suelen terminar repartidos entre hojas de calculo, correos, carpetas compartidas o controles manuales. Eso provoca varios problemas:
+
+- Folios duplicados o secuencias inconsistentes.
+- Dificultad para saber que cambios siguen abiertos.
+- Poca claridad sobre quien es responsable de cada cambio.
+- Falta de filtros por programa, tipo de documento, estado, model year o fase.
+- Riesgo de que usuarios vean o modifiquen documentos de programas que no les corresponden.
+- Poca trazabilidad cuando se cierra, cancela, reabre o reasigna un documento.
+
+Folio System resuelve esto poniendo una API y una UI encima de una base SQL Server. El backend concentra las reglas fuertes de negocio y la base de datos guarda entidades normalizadas: programas, familias, usuarios, tipos de documento, DREs, car leaders, folios, detalles por tipo de folio, secuencias y auditoria.
+
+
+3. Dominio del negocio
+----------------------
+
+El concepto principal del sistema es el engineering change, representado por la tabla EngineeringChanges. Cada engineering change tiene:
+
+- Folio unico.
+- Programa.
+- Tipo de documento.
+- Familia.
+- Ingeniero responsable.
+- Usuario creador.
+- Model year.
+- Fase.
+- Estado.
+- Fechas de creacion, actualizacion y cierre/cancelacion.
+
+Dependiendo del tipo de documento, el registro principal se complementa con una tabla de detalle:
+
+- EngineeringChangeBcnDetails para BCN.
+- EngineeringChangeDcnDetails para DCN.
+- EngineeringChangeDfmDetails para DFM.
+
+Esta decision separa los campos comunes de los campos especificos. El sistema evita que un documento DFM cargue campos de BCN/DCN y viceversa. Esa separacion tambien evita una tabla principal llena de columnas que solo aplican a algunos tipos.
+
+
+4. Tipos de documento
+---------------------
+
+BCN
+
+Un BCN representa un BOM Change Notice. Para este tipo se requiere:
+
+- Programa.
+- Familia del programa.
+- Ingeniero responsable del mismo programa.
+- Model year.
+- Fase.
+- Car leader del programa.
+- Descripcion del cambio.
+
+Regla importante: aunque el formulario envia carLeaderId, el backend no confia en ese valor para BCN. En creacion y edicion, el backend busca el car leader activo del programa y exige que exista exactamente uno. Si hay cero o mas de uno, rechaza la operacion. Esto significa que el car leader no se elige manualmente por documento; es una asignacion derivada del programa.
+
+DCN
+
+Un DCN representa un Design Change Notice. Para este tipo se requiere:
+
+- Programa.
+- Familia del programa.
+- Ingeniero responsable del mismo programa.
+- Model year.
+- Fase.
+- Car leader del programa.
+- Descripcion del cambio.
+
+Ademas puede registrar:
+
+- Documento asociado.
+
+Igual que BCN, el car leader se obtiene automaticamente desde el programa y debe haber exactamente uno activo. El documento asociado no aparece como obligatorio en el backend actual; la descripcion del cambio si lo es.
+
+DFM
+
+Un DFM representa Design for Manufacturing. Para este tipo se requiere:
+
+- Programa.
+- Familia del programa.
+- Ingeniero responsable del mismo programa.
+- Model year.
+- Fase.
+- Composite.
+- Issue.
+- DRE del mismo programa.
+
+DFM no debe contener car leader, descripcion de cambio ni documento asociado. El backend rechaza la peticion si se mezclan campos de BCN/DCN dentro de DFM.
+
+
+5. Estados del documento
+------------------------
+
+Los estados actuales son:
+
+- OPEN.
+- CLOSED.
+- CANCELLED.
+
+OPEN
+
+Es el estado inicial de todo documento creado. Mientras un documento esta OPEN puede editarse, cerrarse o cancelarse si el usuario tiene permiso.
+
+CLOSED
+
+Representa un documento cerrado. Al cerrarse se captura razon obligatoria, se marca ClosedAt y se guarda auditoria. En el flujo actual, CLOSED es definitivo: no existe endpoint para reabrir documentos cerrados.
+
+CANCELLED
+
+Representa un documento cancelado. Al cancelarse se captura razon obligatoria, se marca ClosedAt y se guarda auditoria. A diferencia de CLOSED, CANCELLED puede volver a OPEN, pero solo mediante reapertura y solo por usuario admin o leader con permiso sobre el programa.
+
+Reapertura
+
+Solo aplica a CANCELLED. La reapertura requiere razon obligatoria, cambia el estado a OPEN, limpia ClosedAt y registra auditoria. No aplica a CLOSED.
+
+Decision de negocio implicita: cancelar no significa borrar. El folio permanece en la base y conserva su identidad. Esto protege la trazabilidad y evita reutilizar folios.
+
+
+6. Folios y secuencia
+---------------------
+
+El folio se genera en SQL Server mediante el stored procedure GenerateEngineeringFolio.
+
+Formato:
+
+PROGRAM-YY-TYPE-0000
+
+Ejemplo conceptual:
+
+Y2XX-26-BCN-0001
+
+La secuencia depende de:
+
+- Programa.
+- Tipo de documento.
+- Anio.
+
+La tabla SequenceControl guarda el contador actual por combinacion ProgramId, DocumentTypeId y Year. Si no existe contador para esa combinacion, el stored procedure lo crea en cero y luego incrementa a uno.
+
+Decision tecnica importante: la creacion del documento abre una transaccion con IsolationLevel.Serializable antes de validar entidades relacionadas y generar el folio. Esto reduce el riesgo de carreras al generar folios concurrentes. Ademas, la columna Folio es unica en EngineeringChanges, lo que funciona como defensa adicional contra duplicados.
+
+Por que se resuelve con stored procedure:
+
+- La regla de secuencia vive cerca de la base de datos, donde tambien vive el contador.
+- Se evita duplicar logica de folio en frontend o servicios externos.
+- SQL Server puede actualizar SequenceControl y devolver el folio de forma controlada.
+
+Riesgo actual:
+
+- El stored procedure hace SELECT, INSERT si no existe y UPDATE. La transaccion serializable desde EF ayuda mucho, pero si el procedure se invoca desde otro cliente sin aislamiento equivalente, podria haber condiciones de carrera. La restriccion unica sobre SequenceControl y Folio ayuda a detectar inconsistencias, pero el patron ideal a futuro podria incluir bloqueos explicitos o un UPSERT mas robusto.
+
+
+7. Usuarios, roles y permisos
+-----------------------------
+
+El modelo de usuario tiene dos dimensiones:
+
+- Role: rol operativo.
+- IsAdmin: permiso administrativo global.
+
+Roles operativos:
+
+- LEADER.
+- ENGINEER.
+- DRAFTER.
+
+El seed original guarda roles en minusculas, pero el backend compara roles con StringComparison.OrdinalIgnoreCase o con ToUpper en validaciones especificas. En las respuestas y UI normalmente se normaliza a mayusculas para decisiones visuales.
+
+IsAdmin
+
+IsAdmin no es lo mismo que Role. Un usuario puede tener un rol operativo y ademas IsAdmin true. IsAdmin habilita vista global y endpoints administrativos.
+
+Alcance por programa
+
+Los usuarios que no son admin y cuyo rol es DRAFTER, ENGINEER o LEADER son usuarios con alcance de programa. Esto significa:
+
+- Solo ven documentos de su ProgramId.
+- Solo reciben opciones de formulario de su programa.
+- No pueden operar documentos de otros programas.
+
+Admin
+
+Un admin puede:
+
+- Ver todos los programas.
+- Crear documentos en cualquier programa.
+- Editar documentos OPEN de cualquier programa.
+- Cerrar documentos OPEN.
+- Cancelar documentos OPEN.
+- Reabrir documentos CANCELLED.
+- Consultar y editar usuarios.
+- Consultar y editar catalogos.
+- Ver reportes globales.
+
+Leader
+
+Un leader puede:
+
+- Ver documentos de su programa.
+- Editar documentos OPEN de su programa.
+- Cancelar documentos OPEN de su programa.
+- Reabrir documentos CANCELLED de su programa.
+- Reasignar responsable dentro de su programa, pero debe capturar una razon cuando cambia el ingeniero responsable.
+
+Un leader no puede cerrar documentos segun la regla actual. El cierre esta reservado para admin o engineer responsable.
+
+Engineer
+
+Un engineer puede:
+
+- Ver documentos de su programa.
+- Editar documentos OPEN donde el es el responsable actual.
+- Cerrar documentos OPEN donde el es responsable.
+- Cancelar documentos OPEN donde el es responsable.
+
+Un engineer no puede editar documentos donde no es responsable, aunque esten dentro de su programa.
+
+Drafter
+
+Un drafter puede:
+
+- Autenticarse.
+- Ver documentos de su programa.
+- Consultar listados y detalle.
+
+No tiene acciones de edicion, cierre, cancelacion, reapertura ni administracion.
+
+
+8. Reglas de creacion de documentos
+-----------------------------------
+
+Endpoint:
+
+POST /api/engineering-changes
+
+Reglas generales:
+
+- Requiere usuario autenticado.
+- Type es obligatorio.
+- ProgramCode es obligatorio.
+- FamilyId es obligatorio y debe pertenecer al programa.
+- ResponsibleEngineerId es obligatorio, debe estar activo, tener rol ENGINEER y pertenecer al programa.
+- ModelYear es obligatorio.
+- Phase es obligatorio.
+- El usuario creador debe existir y estar activo.
+- Si el creador no es admin, su ProgramId debe coincidir con el programa elegido.
+- El documento siempre inicia en OPEN.
+- El folio se genera en backend/base de datos, no en frontend.
+
+Reglas por tipo:
+
+- BCN requiere ChangeDescription y no permite AssociatedDocument, Composite, Issue ni DreId.
+- DCN requiere ChangeDescription y no permite Composite, Issue ni DreId.
+- DFM requiere Composite, Issue y DreId, y no permite CarLeaderId, ChangeDescription ni AssociatedDocument.
+
+Despues de crear:
+
+- Se crea el registro principal en EngineeringChanges.
+- Se crea exactamente un registro de detalle en la tabla correspondiente al tipo.
+- Se recarga el documento con sus relaciones.
+- Se crea auditoria con accion "create".
+- Se confirma la transaccion.
+
+
+9. Reglas de edicion
+--------------------
+
+Endpoint:
+
+PATCH /api/engineering-changes/{id}
+
+Reglas:
+
+- Requiere usuario autenticado y activo.
+- El documento debe existir.
+- Solo documentos OPEN pueden editarse.
+- Admin puede editar cualquier documento OPEN.
+- Leader puede editar documentos OPEN de su programa.
+- Engineer solo puede editar si es el responsable actual del documento.
+- Otros roles reciben 403.
+
+Validaciones:
+
+- FamilyId requerido y debe pertenecer al programa del documento.
+- ResponsibleEngineerId requerido, activo, rol ENGINEER y del mismo programa.
+- ModelYear requerido.
+- Phase requerido.
+- Si un leader cambia el responsable, ReassignmentReason es obligatorio.
+- Se aplican las mismas reglas de campos por tipo que en creacion.
+
+Detalles de implementacion:
+
+- El tipo y programa estan bloqueados en edicion. El endpoint no permite cambiar Type ni ProgramCode.
+- Si falta el registro de detalle especifico, el backend lo crea con el Id del EngineeringChange.
+- Se registra UpdatedAt y UpdatedByUserId.
+- Se guarda auditoria con accion "edit".
+- Si hubo reasignacion, la razon se guarda en auditoria.
+- La auditoria guarda snapshots JSON de antes y despues.
+
+Decision importante:
+
+La edicion no permite cambiar el tipo de documento ni el programa porque eso afectaria la identidad del folio. El folio incluye programa, anio y tipo; permitir cambiar esos campos implicaria regenerar folio o dejar un folio que ya no describe al documento.
+
+
+10. Reglas de cierre
+--------------------
+
+Endpoint:
+
+PATCH /api/engineering-changes/{id}/close
+
+Reglas:
+
+- Requiere usuario autenticado y activo.
+- El documento debe existir.
+- Usuarios con alcance de programa solo pueden operar documentos de su programa.
+- Solo documentos OPEN pueden cerrarse.
+- Admin puede cerrar.
+- Engineer responsable puede cerrar.
+- Leader no puede cerrar a menos que tambien sea admin.
+- La razon es obligatoria.
+
+Efectos:
+
+- Status cambia a CLOSED.
+- ClosedAt se establece con DateTime.UtcNow.
+- UpdatedAt y UpdatedByUserId se actualizan.
+- Se crea auditoria con accion "close", razon y transicion OPEN -> CLOSED.
+
+
+11. Reglas de cancelacion
+-------------------------
+
+Endpoint:
+
+PATCH /api/engineering-changes/{id}/cancel
+
+Reglas:
+
+- Requiere usuario autenticado y activo.
+- El documento debe existir.
+- Usuarios con alcance de programa solo pueden operar documentos de su programa.
+- Solo documentos OPEN pueden cancelarse.
+- Admin puede cancelar.
+- Leader puede cancelar documentos de su programa.
+- Engineer responsable puede cancelar.
+- La razon es obligatoria.
+
+Efectos:
+
+- Status cambia a CANCELLED.
+- ClosedAt se establece con DateTime.UtcNow.
+- UpdatedAt y UpdatedByUserId se actualizan.
+- Se crea auditoria con accion "cancel", razon y transicion OPEN -> CANCELLED.
+
+
+12. Reglas de reapertura
+------------------------
+
+Endpoint:
+
+PATCH /api/engineering-changes/{id}/reopen
+
+Reglas:
+
+- Requiere usuario autenticado y activo.
+- El documento debe existir.
+- Usuarios con alcance de programa solo pueden operar documentos de su programa.
+- Solo admin o leader pueden reabrir.
+- Solo documentos CANCELLED pueden reabrirse.
+- La razon es obligatoria.
+
+Efectos:
+
+- Status cambia a OPEN.
+- ClosedAt se limpia.
+- UpdatedAt y UpdatedByUserId se actualizan.
+- Se crea auditoria con accion "reopen", razon y transicion CANCELLED -> OPEN.
+
+Decision de negocio:
+
+La reapertura existe para cancelaciones porque una cancelacion puede ser reversible por error o cambio de criterio. En cambio, CLOSED se trata como estado final.
+
+
+13. Auditoria
+-------------
+
+La auditoria principal de cambios de ingenieria vive en EngineeringChangeAuditLog.
+
+Campos:
+
+- EngineeringChangeId.
+- Action.
+- Reason.
+- StatusBefore.
+- StatusAfter.
+- BeforeJson.
+- AfterJson.
+- CreatedByUserId.
+- CreatedAt.
+
+Acciones actuales:
+
+- create.
+- edit.
+- close.
+- cancel.
+- reopen.
+
+Para create:
+
+- BeforeJson es null.
+- AfterJson contiene snapshot del documento creado.
+- StatusBefore es null.
+- StatusAfter es OPEN.
+
+Para edit:
+
+- BeforeJson contiene snapshot previo.
+- AfterJson contiene snapshot posterior.
+- Reason solo se llena si el leader cambio el responsable.
+
+Para close, cancel y reopen:
+
+- Se guarda razon obligatoria.
+- Se guardan estados antes y despues.
+- Actualmente no se guardan snapshots completos para estas acciones, solo la transicion de estado y razon.
+
+Decision tecnica:
+
+Guardar snapshots JSON permite conservar una foto del documento sin crear tablas de historial por cada entidad de detalle. Es una solucion practica para MVP, con buen valor de trazabilidad y poco costo de schema.
+
+Pendiente:
+
+El panel Admin Reports muestra conteos y ultimos documentos, pero todavia no expone una vista dedicada de EngineeringChangeAuditLog. La auditoria ya existe en backend/base, pero falta UI para consultarla de manera completa.
+
+
+14. Catalogos
+-------------
+
+Catalogos principales:
+
+- Programs.
+- DocumentTypes.
+- Families.
+- CarLeaders.
+- DREs.
+- Users.
+
+Programas
+
+Representan proyectos o programas de vehiculo. Ejemplos en seed:
+
+- Y2XX.
+- 31XX.
+- OPAL.
+- CX727.
+
+Los programas tienen Code, Name, IsActive y campos de auditoria administrativa. El Code es unico.
+
+Tipos de documento
+
+Representan BCN, DCN y DFM. El Code es unico. Aunque el catalogo permite crear o editar tipos de documento, la logica de negocio del backend solo soporta explicitamente BCN, DCN y DFM. Si se crea un tipo nuevo desde catalogos, no funcionara como tipo valido para creacion de engineering change hasta que se agregue logica de negocio.
+
+Familias
+
+Una familia pertenece a un programa. En creacion y edicion de documentos, la familia debe pertenecer al mismo programa del documento. Para catalogos, se evita crear familias duplicadas dentro del mismo programa usando comparacion case-insensitive.
+
+Car Leaders
+
+Un car leader pertenece a un programa. Para BCN y DCN debe haber exactamente un car leader activo por programa. Esta regla es fuerte: si el catalogo deja cero o multiples car leaders activos para un programa, crear o editar BCN/DCN falla.
+
+DREs
+
+Un DRE pertenece a un programa. Para DFM, el DRE elegido debe estar activo y pertenecer al programa.
+
+Usuarios
+
+Los usuarios pertenecen a un programa y tienen Role, IsAdmin, IsActive, Username y PasswordHash. El username es unico. El panel admin actual permite editar usuarios existentes, no crearlos.
+
+
+15. Administracion
+------------------
+
+Endpoints administrativos:
+
+- GET /api/admin/users.
+- PATCH /api/admin/users/{id}.
+- GET /api/admin/catalogs.
+- POST /api/admin/programs.
+- PATCH /api/admin/programs/{code}.
+- POST /api/admin/document-types.
+- PATCH /api/admin/document-types/{code}.
+- POST /api/admin/families.
+- PATCH /api/admin/families/{id}.
+- GET /api/admin/reports/summary.
+
+Todos requieren IsAdmin true. Un usuario con rol LEADER pero IsAdmin false no puede acceder a estos endpoints.
+
+Admin Users
+
+Permite:
+
+- Ver usuarios.
+- Editar nombre.
+- Editar rol.
+- Cambiar programa.
+- Activar/desactivar.
+- Marcar o quitar IsAdmin.
+
+Cuando un usuario se desactiva:
+
+- IsActive pasa a false.
+- DeactivatedAt se llena si antes estaba null.
+- DeactivatedByUserId se llena con el admin actual.
+
+Cuando se reactiva:
+
+- DeactivatedAt se limpia.
+- DeactivatedByUserId se limpia.
+
+Admin Catalogs
+
+Permite crear y editar:
+
+- Programas.
+- Tipos de documento.
+- Familias.
+
+La UI tiene vistas por catalogo, cards con conteos, tablas, busqueda y filtro de familias por programa.
+
+Limitacion actual:
+
+- No administra CarLeaders ni DREs desde frontend, aunque existen en base y se usan en formularios.
+- No crea usuarios nuevos.
+- No resetea passwords.
+- No maneja soft delete/desactivacion desde catalogos aunque las tablas tienen IsActive.
+
+Admin Reports
+
+Muestra:
+
+- Conteos por estado.
+- Conteos por tipo.
+- Conteos por programa.
+- Ultimos 20 documentos.
+
+No muestra todavia un historial detallado por accion de auditoria.
+
+
+16. Autenticacion y sesion
+--------------------------
+
+Login:
+
+POST /api/auth/login
+
+Reglas:
+
+- Username y password son obligatorios.
+- Solo usuarios activos pueden iniciar sesion.
+- El username se compara sin sensibilidad a mayusculas/minusculas.
+- Si la password no coincide, responde Unauthorized.
+
+JWT:
+
+El backend genera un JWT con:
+
+- NameIdentifier: Id del usuario.
+- Name: DisplayName.
+- GivenName: Username.
+- Role.
+- IsAdmin.
+- ProgramId.
+
+La expiracion default es 480 minutos. Issuer, Audience, Key y expiracion se toman de configuracion.
+
+Middleware:
+
+JwtAuthenticationMiddleware lee Authorization: Bearer <token>, valida firma, issuer, audience y expiracion. Si el token es valido, coloca el ClaimsPrincipal en HttpContext.User y agrega el header interno X-Auth-User-Id con el id del usuario.
+
+Decision tecnica:
+
+Los endpoints no usan attributes de autorizacion de ASP.NET, sino validacion manual mediante TryGetAuthenticatedActiveUserAsync o TryGetAuthenticatedUserId. Esto encaja con Minimal APIs y mantiene las reglas cerca del endpoint, pero a futuro podria migrarse a politicas de autorizacion para reducir repeticion.
+
+Almacenamiento frontend:
+
+- Token en localStorage con llave folio.auth.token.
+- Usuario en localStorage con llave folio.auth.user.
+- El cliente HTTP agrega Authorization Bearer automaticamente.
+
+Riesgo:
+
+localStorage es simple para MVP, pero expone el token a XSS. Para produccion se podria evaluar cookie HttpOnly/SameSite, hardening de CSP y expiracion/refresh mas controlado.
+
+
+17. Passwords
+-------------
+
+El backend soporta tres formatos:
+
+- PBKDF2 con formato PBKDF2$iterations$salt$hash.
+- SHA256 hexadecimal de 64 caracteres.
+- Texto plano como compatibilidad historica.
+
+El seed actual genera SHA2_256 en SQL Server usando password igual al username. El README marca como deuda quitar fallback de password plano y usar hashing obligatorio.
+
+Decision tecnica:
+
+Soportar SHA256 permite que los usuarios seed existentes funcionen. Soportar PBKDF2 prepara el camino a hashes mas seguros. El fallback a texto plano facilita compatibilidad historica pero debe eliminarse antes de produccion.
+
+Riesgo alto:
+
+- Password igual a username en seed.
+- Fallback de texto plano.
+- Clave JWT de ejemplo en appsettings.
+
+Para produccion se debe:
+
+- Forzar PBKDF2, bcrypt o Argon2.
+- Eliminar comparacion en texto plano.
+- Rotar credenciales.
+- Mover secretos a variables de entorno.
+- Usar una Jwt Key fuerte y privada.
+
+
+18. Arquitectura backend
+------------------------
+
+Stack:
+
+- ASP.NET Core Minimal APIs.
+- .NET net10.0.
+- Entity Framework Core SQL Server.
+- SQL Server.
+- JWT manual con System.IdentityModel.Tokens.Jwt.
+
+Estructura:
+
+- Program.cs: endpoints, reglas de negocio y helpers.
+- Data/EngineeringRegistryDbContext.cs: mapeo EF.
+- Models/: entidades.
+- Contracts/: DTOs.
+- Middleware/: autenticacion JWT.
+- Services/: generacion de token JWT.
+
+Program.cs concentra mucha logica:
+
+- Mapeo de entidad a DTO.
+- Construccion de queries con Includes.
+- Validacion de permisos.
+- Validacion de campos por tipo.
+- Creacion, edicion y cambios de estado.
+- Auditoria.
+- Endpoints admin.
+
+Decision actual:
+
+Para un MVP, centralizar en Program.cs reduce archivos y facilita ver el flujo completo. Para escalar, convendria mover logica a servicios como EngineeringChangeService, AuthorizationService, CatalogService y AuditService.
+
+DbContext:
+
+El DbContext define tablas, llaves, longitudes, relaciones, indices y deletes. Usa fluent configuration en OnModelCreating.
+
+Relaciones relevantes:
+
+- EngineeringChanges tiene Program, DocumentType, Family, ResponsibleEngineer, CreatedByUser y UpdatedByUser.
+- Cada detalle BCN/DCN/DFM tiene relacion one-to-one con EngineeringChanges usando EngineeringChangeId como primary key.
+- BcnDetail y DcnDetail apuntan a CarLeader con OnDelete SetNull.
+- DfmDetail apunta a Dre con OnDelete SetNull.
+- EngineeringChangeAuditLog apunta a EngineeringChanges con cascade delete.
+
+Aunque hay cascade delete en detalles y audit log, el sistema de negocio no expone eliminacion de documentos. Por lo tanto, el cascade delete es una proteccion relacional, no un flujo funcional normal.
+
+
+19. Arquitectura frontend
+-------------------------
+
+Stack:
+
+- React 19.
+- TypeScript.
+- Vite.
+- React Router.
+- lucide-react.
+- CSS global en src/index.css.
+
+Estructura:
+
+- src/api/client.ts: API base, headers y fetch comun.
+- src/auth/: contexto de autenticacion y hook.
+- src/services/: llamadas HTTP.
+- src/hooks/: hooks para cargar datos.
+- src/pages/: pantallas.
+- src/components/: layout, dialogos, formularios y tablas.
+- src/types/: tipos compartidos del frontend.
+
+Rutas:
+
+- /login.
+- /documents.
+- /documents/new.
+- /documents/:id.
+- /documents/bcn.
+- /documents/dcn.
+- /documents/dfm.
+- /admin.
+- /admin/users.
+- /admin/catalogs.
+- /admin/reports.
+
+Proteccion:
+
+- RequireAuth redirige a /login si no hay usuario en sesion.
+- RequireAdmin redirige a /documents si el usuario no tiene isAdmin.
+
+Flujo de UI:
+
+- Documents Overview muestra conteos de documentos del programa del usuario.
+- DocumentsTable permite filtrar por folio, estado, programa para admin, model year y fase.
+- DocumentsTable permite ordenar columnas en cliente.
+- DocumentDetailPage muestra acciones segun permisos calculados en frontend.
+- DocumentForm adapta campos segun tipo BCN, DCN o DFM.
+- ReasonDialog captura razon para cerrar, cancelar y reabrir.
+
+Decision importante:
+
+El frontend calcula permisos para mostrar/ocultar botones, pero el backend vuelve a validar todo. Esto es correcto: la UI mejora experiencia, pero la seguridad real vive en el servidor.
+
+
+20. API y contratos
+-------------------
+
+EngineeringChangeDto devuelve una forma plana pensada para la UI:
+
+- Ids internos necesarios para edicion.
+- Folio, type, program, family, responsible, createdBy.
+- Campos comunes.
+- Campos especificos opcionales.
+
+CreateEngineeringChangeRequestDto recibe todos los posibles campos, pero el backend decide cuales son validos segun Type.
+
+UpdateEngineeringChangeRequestDto no recibe Type ni ProgramCode porque esos campos estan bloqueados despues de crear.
+
+DocumentFormOptionsDto alimenta los selects:
+
+- DocumentTypes.
+- Programs.
+- Families.
+- CarLeaders.
+- Dres.
+- ResponsibleEngineers.
+
+Para usuarios con alcance de programa, las opciones se filtran en backend por ProgramId. Para admin, se devuelven todas.
+
+
+21. Base de datos
+-----------------
+
+Base:
+
+- FolioDB.
+
+Tablas principales:
+
+- Programs.
+- DocumentTypes.
+- Families.
+- DREs.
+- CarLeaders.
+- Users.
+- EngineeringChanges.
+- EngineeringChangeBcnDetails.
+- EngineeringChangeDcnDetails.
+- EngineeringChangeDfmDetails.
+- EngineeringChangeAuditLog.
+- SequenceControl.
+
+Indices importantes:
+
+- Programs.Code unico.
+- DocumentTypes.Code unico.
+- Users.Username unico.
+- EngineeringChanges.Folio unico.
+- SequenceControl unico por ProgramId, DocumentTypeId y Year.
+- Indices para ProgramId, DocumentTypeId, FamilyId, ResponsibleEngineerId y CreatedByUserId en EngineeringChanges.
+- Indices para auditoria por EngineeringChangeId y CreatedAt.
+
+Scripts:
+
+- scripts/create-folio-db.sql crea schema completo y stored procedure.
+- scripts/seed-folio-db.sql carga datos iniciales.
+- scripts/update-folio-db-audit.sql migra bases existentes agregando campos de auditoria, soft delete y EngineeringChangeAuditLog con guards para poder ejecutarse varias veces.
+- scripts/old conserva versiones historicas.
+
+Decision tecnica:
+
+No se usan migrations de EF en el estado actual. El schema se maneja con scripts SQL versionados. Esto es entendible en entornos donde la base se administra directamente en SQL Server, pero a futuro hay que elegir una estrategia clara: EF migrations o scripts SQL manuales disciplinados.
+
+
+22. Como se resuelve lo mas importante
+--------------------------------------
+
+Generacion unica de folios
+
+Se resuelve con SequenceControl + stored procedure + transaccion serializable + unique index en Folio.
+
+Control de acceso por programa
+
+Se resuelve con ProgramId en usuarios y documentos. Los endpoints filtran queries y bloquean acciones si un usuario no admin intenta salir de su programa.
+
+Campos distintos por tipo de documento
+
+Se resuelve con una tabla comun EngineeringChanges y tres tablas detalle separadas. El backend valida que no se mezclen campos de otros tipos.
+
+Asignacion de responsables
+
+Se resuelve obligando a que ResponsibleEngineerId sea un usuario activo, rol ENGINEER y perteneciente al programa del documento.
+
+Car leader automatico
+
+Se resuelve derivandolo del programa y exigiendo exactamente uno activo. Esto evita errores humanos de seleccionar un car leader incorrecto en BCN/DCN.
+
+Trazabilidad de cambios
+
+Se resuelve con campos UpdatedAt/UpdatedByUserId, ClosedAt y EngineeringChangeAuditLog. Ediciones guardan snapshots JSON. Cambios de estado guardan accion, razon y transicion.
+
+Administracion
+
+Se resuelve con IsAdmin como bandera separada del rol operativo. Esto permite que la administracion sea global sin mezclarla con LEADER/ENGINEER/DRAFTER.
+
+
+23. Decisiones tomadas y tradeoffs
+----------------------------------
+
+Minimal APIs sobre controladores
+
+Ventaja:
+
+- Menos estructura para un MVP.
+- Endpoints faciles de ubicar en Program.cs.
+
+Costo:
+
+- Program.cs crece mucho.
+- La logica de negocio queda mezclada con transporte HTTP.
+
+Recomendacion futura:
+
+- Separar servicios por dominio cuando el proyecto crezca.
+
+SQL Server y stored procedure para folios
+
+Ventaja:
+
+- SQL Server es adecuado para consistencia relacional y secuencias.
+- El folio se genera cerca del dato.
+
+Costo:
+
+- El backend depende de un stored procedure instalado.
+- Tests automatizados requieren base real o estrategia de integracion.
+
+Tablas detalle por tipo
+
+Ventaja:
+
+- Modelo mas limpio que una tabla con muchos nullable.
+- Cada tipo tiene sus campos propios.
+
+Costo:
+
+- Consultas requieren Includes y mapeo condicional.
+- Agregar nuevos tipos requiere nueva logica y posiblemente nueva tabla.
+
+IsAdmin separado de Role
+
+Ventaja:
+
+- Permite dar permisos administrativos sin inventar rol ADMIN que compita con roles operativos.
+- Admin puede seguir teniendo programa y rol operativo.
+
+Costo:
+
+- Las reglas deben revisar dos conceptos: Role e IsAdmin.
+
+Frontend con permisos visuales, backend con permisos reales
+
+Ventaja:
+
+- Buena experiencia sin sacrificar seguridad.
+
+Costo:
+
+- Hay duplicacion parcial de reglas en UI y backend.
+
+localStorage para JWT
+
+Ventaja:
+
+- Sencillo y rapido para MVP.
+
+Costo:
+
+- Riesgo ante XSS.
+
+Scripts SQL sobre migrations EF
+
+Ventaja:
+
+- Control directo del schema.
+- Facil de correr en SQL Server Management Studio.
+
+Costo:
+
+- Riesgo de desalineacion entre DbContext y schema si no se actualizan juntos.
+
+
+24. Lo trivial pero importante
+------------------------------
+
+Normalizacion de inputs
+
+El backend hace Trim en strings importantes. ProgramCode y codigos de catalogos se normalizan a mayusculas en varias operaciones.
+
+Errores claros
+
+La API responde mensajes concretos para BadRequest. El frontend intenta leer message del body para mostrar errores utiles.
+
+Fechas
+
+Se usan DateTime.UtcNow en backend. Los DTOs formatean fechas como yyyy-MM-dd para la UI.
+
+Sin borrado fisico funcional
+
+No hay endpoint de delete para documentos. Cerrar, cancelar y reabrir son cambios de estado.
+
+Filtros
+
+El backend soporta filtros por search, type, program, status, modelYear y phase. El frontend tambien filtra y ordena en cliente. Esto significa que hay cierto doble filtrado; para volumen bajo esta bien, para volumen alto conviene mover ordenamiento/paginacion al backend.
+
+CORS
+
+El backend permite origenes configurables. Si no hay configuracion, permite localhost y 127.0.0.1 en puerto 5173.
+
+Render
+
+El repo incluye render.yaml con backend Docker y frontend static site. La base SQL Server debe estar fuera de Render porque Render no provee SQL Server administrado.
+
+
+25. Riesgos y deuda tecnica
+---------------------------
+
+Seguridad:
+
+- Eliminar fallback de password plano.
+- Evitar password igual a username en datos reales.
+- Rotar JWT key y mover secretos a variables de entorno.
+- Evaluar cookies HttpOnly o mitigaciones fuertes para localStorage.
+- Agregar politicas de autorizacion centralizadas.
+
+Auditoria:
+
+- Exponer EngineeringChangeAuditLog en UI admin.
+- Considerar snapshots tambien para close/cancel/reopen.
+- Agregar filtros por usuario, fecha, accion y folio.
+
+Datos y catalogos:
+
+- Admin Catalogs no administra CarLeaders ni DREs.
+- Si se crean tipos de documento distintos a BCN/DCN/DFM, no hay logica para usarlos.
+- Falta soft delete/desactivacion funcional de programas, tipos y familias desde UI.
+
+Testing:
+
+- No se detectaron pruebas automatizadas.
+- Hace falta probar permisos por rol.
+- Hace falta probar generacion concurrente de folios.
+- Hace falta probar validaciones por tipo.
+- Hace falta probar flujo frontend con mocks o integration tests.
+
+Arquitectura:
+
+- Program.cs esta cargado con demasiada responsabilidad.
+- Falta capa de servicios y posiblemente repositorios/queries especializadas.
+- Falta paginacion server-side.
+- Falta manejo global de errores mas uniforme.
+
+Frontend:
+
+- El cliente no limpia sesion automaticamente en todos los fetch al recibir 401; el README lo menciona, pero client.ts actualmente solo lanza error. Conviene centralizar manejo de 401.
+- Ordenamiento y filtros se hacen parcialmente en cliente.
+- Admin Reports todavia es basico.
+
+Deploy:
+
+- SQL Server externo requerido.
+- Variables sensibles deben configurarse fuera del repo.
+- Confirmar compatibilidad de .NET net10.0 y Vite beta con el entorno de despliegue.
+
+
+26. Lectura rapida para nuevos desarrolladores
+----------------------------------------------
+
+Si necesitas entender el proyecto rapido:
+
+1. Empieza por backend/Program.cs para ver reglas reales.
+2. Revisa backend/Data/EngineeringRegistryDbContext.cs para entender el modelo relacional.
+3. Revisa scripts/create-folio-db.sql para ver el schema SQL y GenerateEngineeringFolio.
+4. Revisa frontend/src/routes/AppRoutes.tsx para entender navegacion y proteccion de rutas.
+5. Revisa frontend/src/components/documents/DocumentForm.tsx para entender campos por tipo.
+6. Revisa frontend/src/pages/DocumentDetailPage.tsx para entender acciones por rol.
+7. Revisa frontend/src/services/documentService.ts para ver contratos consumidos por la UI.
+
+
+27. Flujo funcional completo
+----------------------------
+
+1. El usuario inicia sesion en /login.
+2. El backend valida usuario activo y password.
+3. El backend devuelve JWT y datos de usuario.
+4. El frontend guarda token y user en localStorage.
+5. El usuario entra a /documents.
+6. La UI carga documentos filtrados por programa si no es admin.
+7. El usuario crea un documento.
+8. La UI carga opciones de catalogo desde /api/document-form-options.
+9. El formulario muestra campos segun tipo BCN/DCN/DFM.
+10. El backend valida autenticacion, permisos, campos y relaciones.
+11. El backend genera folio con GenerateEngineeringFolio.
+12. El backend guarda EngineeringChanges y detalle especifico.
+13. El backend registra auditoria create.
+14. El frontend redirige o muestra el documento creado.
+15. En detalle, la UI muestra acciones permitidas.
+16. Si se edita, el backend valida que este OPEN y que el usuario tenga permiso.
+17. Si se cierra/cancela/reabre, se pide razon y se guarda auditoria.
+
+
+28. Contexto de datos iniciales
+-------------------------------
+
+El seed contiene programas reales o de ejemplo operativo:
+
+- Y2XX Corvette.
+- 31XX-2.
+- Opal.
+- CX727 FORD.
+
+Tambien contiene:
+
+- Familias por programa.
+- DREs por programa.
+- Un car leader por programa.
+- Usuarios con roles drafter, engineer y leader.
+
+La regla del car leader unico se cumple en el seed: cada programa tiene un car leader activo. Esto es necesario para que BCN y DCN funcionen.
+
+
+29. Resumen de endpoints principales
+------------------------------------
+
+Publico o semi-publico:
+
+- GET /api/health: salud basica.
+- POST /api/auth/login: autenticacion.
+
+Documentos:
+
+- GET /api/engineering-changes: listado con filtros.
+- GET /api/engineering-changes/{id}: detalle.
+- POST /api/engineering-changes: crear.
+- PATCH /api/engineering-changes/{id}: editar.
+- PATCH /api/engineering-changes/{id}/close: cerrar con razon.
+- PATCH /api/engineering-changes/{id}/cancel: cancelar con razon.
+- PATCH /api/engineering-changes/{id}/reopen: reabrir con razon.
+- GET /api/document-form-options: catalogos para formulario.
+
+Admin:
+
+- GET /api/admin/users.
+- PATCH /api/admin/users/{id}.
+- GET /api/admin/catalogs.
+- POST /api/admin/programs.
+- PATCH /api/admin/programs/{code}.
+- POST /api/admin/document-types.
+- PATCH /api/admin/document-types/{code}.
+- POST /api/admin/families.
+- PATCH /api/admin/families/{id}.
+- GET /api/admin/reports/summary.
+
+
+30. Conclusiones
+----------------
+
+Folio System ya tiene una base razonable para uso interno controlado. Lo mas valioso del sistema no es solo que crea folios, sino que concentra reglas que antes serian faciles de romper manualmente:
+
+- Folios unicos por programa/tipo/anio.
+- Documentos con estado controlado.
+- Responsables validos por programa.
+- Alcance por programa para usuarios no admin.
+- Campos correctos por tipo BCN/DCN/DFM.
+- Razones obligatorias para cambios de estado.
+- Auditoria de creacion, edicion y cambios de estado.
+
+La decision mas importante del diseno actual es que el backend es la fuente de verdad. El frontend guia al usuario, pero las validaciones reales viven en la API y la base de datos. Eso hace que el sistema sea mas confiable aunque alguien intente llamar la API manualmente.
+
+Para pasar de MVP a produccion robusta, las prioridades recomendadas son seguridad de passwords/JWT, pruebas automatizadas, vista completa de auditoria, manejo centralizado de autorizacion, administracion completa de catalogos y paginacion/filtros server-side.
